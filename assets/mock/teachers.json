@@ -1,0 +1,16 @@
+[
+  {"id":"tea-001","firstName":"Samuel","lastName":"Nkoulou","grade":"Professeur","email":"samuel.nkoulou@dept-info.demo","phone":"+237 655 00 60 59","contractHours":180,"photo":"assets/images/user_1.jpg"},
+  {"id":"tea-002","firstName":"Brigitte","lastName":"Mbarga","grade":"Maître de conférences","email":"brigitte.mbarga@dept-info.demo","phone":"+237 655 80 73 36","contractHours":150,"photo":"assets/images/user_2.jpg"},
+  {"id":"tea-003","firstName":"Armand","lastName":"Tchoua","grade":"Maître de conférences","email":"armand.tchoua@dept-info.demo","phone":"+237 655 79 90 77","contractHours":165,"photo":"assets/images/user_3.jpg"},
+  {"id":"tea-004","firstName":"Clarisse","lastName":"Fotso","grade":"Chargé de cours","email":"clarisse.fotso@dept-info.demo","phone":"+237 699 18 66 96","contractHours":120,"photo":"assets/images/user_4.jpg"},
+  {"id":"tea-005","firstName":"Hervé","lastName":"Kamga","grade":"Maître de conférences","email":"herve.kamga@dept-info.demo","phone":"+237 690 66 81 35","contractHours":180,"photo":"assets/images/user_5.jpg"},
+  {"id":"tea-006","firstName":"Patrick","lastName":"Essomba","grade":"Chargé de cours","email":"patrick.essomba@dept-info.demo","phone":"+237 699 75 40 08","contractHours":135,"photo":"assets/images/user_6.jpg"},
+  {"id":"tea-007","firstName":"Estelle","lastName":"Ngono","grade":"Maître de conférences","email":"estelle.ngono@dept-info.demo","phone":"+237 690 97 08 00","contractHours":135,"photo":"assets/images/user_7.jpg"},
+  {"id":"tea-008","firstName":"Joseph","lastName":"Atangana","grade":"Professeur","email":"joseph.atangana@dept-info.demo","phone":"+237 675 56 41 00","contractHours":105,"photo":"assets/images/user_8.jpg"},
+  {"id":"tea-009","firstName":"Didier","lastName":"Nana","grade":"Vacataire","email":"didier.nana@dept-info.demo","phone":"+237 690 11 39 97","contractHours":150,"photo":"assets/images/user_1.jpg"},
+  {"id":"tea-010","firstName":"Mireille","lastName":"Tagne","grade":"Maître de conférences","email":"mireille.tagne@dept-info.demo","phone":"+237 675 17 61 47","contractHours":150,"photo":"assets/images/user_2.jpg"},
+  {"id":"tea-011","firstName":"Alain","lastName":"Mballa","grade":"Chargé de cours","email":"alain.mballa@dept-info.demo","phone":"+237 690 99 62 06","contractHours":105,"photo":"assets/images/user_3.jpg"},
+  {"id":"tea-012","firstName":"Sandrine","lastName":"Ndongo","grade":"Chargé de cours","email":"sandrine.ndongo@dept-info.demo","phone":"+237 690 09 75 55","contractHours":105,"photo":"assets/images/user_4.jpg"},
+  {"id":"tea-013","firstName":"Fabrice","lastName":"Biyaga","grade":"Maître de conférences","email":"fabrice.biyaga@dept-info.demo","phone":"+237 655 23 14 41","contractHours":150,"photo":"assets/images/user_5.jpg"},
+  {"id":"tea-014","firstName":"Rodrigue","lastName":"Onana","grade":"Vacataire","email":"rodrigue.onana@dept-info.demo","phone":"+237 655 66 24 68","contractHours":150,"photo":"assets/images/user_6.jpg"}
+]

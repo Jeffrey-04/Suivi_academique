@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Présences des enseignants - Suivi Académique</title>
+  <link rel="icon" type="image/png" href="../../assets/images/favicon.ico">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap-icons/bootstrap-icons.css">
+  <link rel="stylesheet" href="../../assets/libs/apexcharts/apexcharts.css">
+  <link rel="stylesheet" href="../../assets/libs/flatpickr/flatpickr.min.css">
+  <!-- Police : chargée sans bloquer l'affichage (la page reste utilisable hors ligne, la police se substitue) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="../../assets/css/main.css">
+</head>
+
+<body class="app-loading">
+  <!-- Sidebar, navbar et footer sont injectés par layout.js (initPage) -->
+  <div class="main-wrapper">
+    <main>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Présences des enseignants</h1>
+          <p class="page-subtitle" id="page-subtitle"></p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-start">
+          <button class="btn-date-picker" type="button" id="date-picker-trigger" aria-label="Choisir la période">
+            <i class="bi bi-calendar4-event"></i>
+            <span id="selected-date-range"></span>
+            <i class="bi bi-chevron-down ms-1"></i>
+          </button>
+          <button class="btn-custom btn-custom-primary" type="button" id="btn-add"><i class="bi bi-person-x"></i> Enregistrer une absence</button>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4" id="kpis"></div>
+
+      <div class="table-card-custom">
+        <div class="table-header-control">
+          <div class="table-search-box">
+            <i class="bi bi-search table-search-icon"></i>
+            <input type="search" class="table-search-input" id="search" placeholder="Enseignant, matière, motif…" aria-label="Rechercher une séance" autocomplete="off">
+          </div>
+          <div class="table-filter-group">
+            <select class="form-select-custom filter-select" id="filter-teacher" aria-label="Filtrer par enseignant"></select>
+            <select class="form-select-custom filter-select" id="filter-status" aria-label="Filtrer par statut">
+              <option value="">Tous les statuts</option>
+              <option value="present">Présents</option>
+              <option value="absent">Absents</option>
+            </select>
+            <div id="export-menu"></div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table-custom">
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+        <div id="table-footer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../../assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="../../assets/libs/apexcharts/apexcharts.min.js"></script>
+  <script src="../../assets/libs/flatpickr/flatpickr.min.js"></script>
+  <script type="module" src="../../assets/js/pages/chef-presences.js"></script>
+</body>
+</html>

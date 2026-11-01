@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulletins - Suivi Académique</title>
+  <link rel="icon" type="image/png" href="../../assets/images/favicon.ico">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap-icons/bootstrap-icons.css">
+  <!-- Police : chargée sans bloquer l'affichage (la page reste utilisable hors ligne, la police se substitue) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="../../assets/css/main.css">
+</head>
+
+<body class="app-loading">
+  <!-- Sidebar, navbar et footer sont injectés par layout.js (initPage) -->
+  <div class="main-wrapper">
+    <main>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Bulletins</h1>
+          <p class="page-subtitle" id="page-subtitle"></p>
+        </div>
+        <button class="btn-custom btn-custom-primary" type="button" id="btn-generate" disabled>
+          <i class="bi bi-file-earmark-plus"></i> <span>Générer les bulletins prêts</span>
+        </button>
+      </div>
+
+      <div class="row g-4 mb-4" id="kpis"></div>
+
+      <div class="table-card-custom">
+        <div class="table-header-control">
+          <div class="table-search-box">
+            <i class="bi bi-search table-search-icon"></i>
+            <input type="search" class="table-search-input" id="search" placeholder="Nom, matricule…" aria-label="Rechercher un étudiant" autocomplete="off">
+          </div>
+          <div class="table-filter-group">
+            <select class="form-select-custom filter-select" id="filter-filiere" aria-label="Filtrer par filière"></select>
+            <select class="form-select-custom filter-select" id="filter-level" aria-label="Filtrer par niveau"></select>
+            <select class="form-select-custom filter-select" id="filter-status" aria-label="Filtrer par état"></select>
+            <button class="btn-table-action" type="button" id="btn-pdf-all" title="Un seul PDF, une page par bulletin généré"><i class="bi bi-file-earmark-pdf"></i> <span>PDF groupé</span></button>
+            <div id="export-menu"></div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table-custom">
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+        <div id="table-footer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../../assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="../../assets/js/pages/chef-bulletins.js"></script>
+</body>
+</html>

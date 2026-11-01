@@ -1,0 +1,20 @@
+[
+  {"id":"ue-001","code":"UE1GL2","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-gl-l2","semester":"S1"},
+  {"id":"ue-002","code":"UE2GL2","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-gl-l2","semester":"S1"},
+  {"id":"ue-003","code":"UE1GL3","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-gl-l3","semester":"S1"},
+  {"id":"ue-004","code":"UE2GL3","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-gl-l3","semester":"S1"},
+  {"id":"ue-005","code":"UE1GL4","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-gl-m1","semester":"S1"},
+  {"id":"ue-006","code":"UE2GL4","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-gl-m1","semester":"S1"},
+  {"id":"ue-007","code":"UE1RT2","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-rt-l2","semester":"S1"},
+  {"id":"ue-008","code":"UE2RT2","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-rt-l2","semester":"S1"},
+  {"id":"ue-009","code":"UE1RT3","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-rt-l3","semester":"S1"},
+  {"id":"ue-010","code":"UE2RT3","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-rt-l3","semester":"S1"},
+  {"id":"ue-011","code":"UE1RT4","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-rt-m1","semester":"S1"},
+  {"id":"ue-012","code":"UE2RT4","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-rt-m1","semester":"S1"},
+  {"id":"ue-013","code":"UE1DS2","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-ds-l2","semester":"S1"},
+  {"id":"ue-014","code":"UE2DS2","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-ds-l2","semester":"S1"},
+  {"id":"ue-015","code":"UE1DS3","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-ds-l3","semester":"S1"},
+  {"id":"ue-016","code":"UE2DS3","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-ds-l3","semester":"S1"},
+  {"id":"ue-017","code":"UE1DS4","name":"Unité d'enseignements 1","type":"UEF","levelId":"lvl-ds-m1","semester":"S1"},
+  {"id":"ue-018","code":"UE2DS4","name":"Unité d'enseignements 2","type":"UEC","levelId":"lvl-ds-m1","semester":"S1"}
+]

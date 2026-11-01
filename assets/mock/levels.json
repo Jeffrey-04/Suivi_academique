@@ -1,0 +1,11 @@
+[
+  {"id":"lvl-gl-l2","name":"L2","label":"Licence 2","filiereId":"fil-gl"},
+  {"id":"lvl-gl-l3","name":"L3","label":"Licence 3","filiereId":"fil-gl"},
+  {"id":"lvl-gl-m1","name":"M1","label":"Master 1","filiereId":"fil-gl"},
+  {"id":"lvl-rt-l2","name":"L2","label":"Licence 2","filiereId":"fil-rt"},
+  {"id":"lvl-rt-l3","name":"L3","label":"Licence 3","filiereId":"fil-rt"},
+  {"id":"lvl-rt-m1","name":"M1","label":"Master 1","filiereId":"fil-rt"},
+  {"id":"lvl-ds-l2","name":"L2","label":"Licence 2","filiereId":"fil-ds"},
+  {"id":"lvl-ds-l3","name":"L3","label":"Licence 3","filiereId":"fil-ds"},
+  {"id":"lvl-ds-m1","name":"M1","label":"Master 1","filiereId":"fil-ds"}
+]

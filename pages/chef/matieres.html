@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matières - Suivi Académique</title>
+  <link rel="icon" type="image/png" href="../../assets/images/favicon.ico">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap-icons/bootstrap-icons.css">
+  <!-- Police : chargée sans bloquer l'affichage (la page reste utilisable hors ligne, la police se substitue) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="../../assets/css/main.css">
+</head>
+
+<body class="app-loading">
+  <!-- Sidebar, navbar et footer sont injectés par layout.js (initPage) -->
+  <div class="main-wrapper">
+    <main>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Matières</h1>
+          <p class="page-subtitle" id="page-subtitle"></p>
+        </div>
+        <button class="btn-custom btn-custom-primary" type="button" id="btn-add">
+          <i class="bi bi-plus-lg"></i> Créer une matière
+        </button>
+      </div>
+
+      <div class="table-card-custom">
+        <div class="table-header-control">
+          <div class="table-search-box">
+            <i class="bi bi-search table-search-icon"></i>
+            <input type="search" class="table-search-input" id="search" placeholder="Code, intitulé, enseignant…" aria-label="Rechercher une matière" autocomplete="off">
+          </div>
+          <div class="table-filter-group">
+            <select class="form-select-custom filter-select" id="filter-filiere" aria-label="Filtrer par filière"></select>
+            <select class="form-select-custom filter-select" id="filter-level" aria-label="Filtrer par niveau"></select>
+            <select class="form-select-custom filter-select" id="filter-teacher" aria-label="Filtrer par enseignant"></select>
+            <div id="export-menu"></div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table-custom">
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+        <div id="table-footer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../../assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="../../assets/js/pages/chef-matieres.js"></script>
+</body>
+</html>

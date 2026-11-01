@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi Académique</title>
+    <link rel="icon" type="image/png" href="assets/images/favicon.ico">
+    <link rel="stylesheet" href="assets/libs/bootstrap/css/bootstrap.min.css">
+    <!-- Police : chargée sans bloquer l'affichage (la page reste utilisable hors ligne, la police se substitue) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"></noscript>
+    <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+    <!-- Point d'entrée : redirige vers le tableau de bord du rôle connecté, sinon vers la connexion -->
+    <div class="d-flex justify-content-center align-items-center min-vh-100">
+        <div class="spinner-border" role="status"><span class="visually-hidden">Chargement…</span></div>
+    </div>
+    <noscript><p class="text-center">JavaScript est nécessaire. <a href="page-login.html">Aller à la connexion</a></p></noscript>
+    <script type="module" src="assets/js/pages/home.js"></script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - Suivi Académique</title>
+    <meta name="description" content="Connexion à l'application de suivi académique du département">
+
+    <link rel="icon" type="image/png" href="assets/images/favicon.ico">
+
+    <link rel="stylesheet" href="assets/libs/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/libs/bootstrap-icons/bootstrap-icons.css">
+    <!-- Police : chargée sans bloquer l'affichage (la page reste utilisable hors ligne, la police se substitue) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"></noscript>
+    <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+
+    <div class="login-wrapper">
+        <div class="login-bg-shape login-bg-shape-1"></div>
+        <div class="login-bg-shape login-bg-shape-2"></div>
+
+        <div class="login-card">
+
+            <a href="index.html" class="login-brand text-decoration-none">
+                <i class="bi bi-mortarboard-fill"></i>
+                <span>Suivi Académique</span>
+            </a>
+
+            <p class="login-subtitle">Connectez-vous pour accéder à votre espace</p>
+
+            <div class="alert alert-danger d-none" role="alert" id="login-error"></div>
+
+            <form id="loginForm" class="needs-validation" novalidate>
+
+                <div class="login-form-group">
+                    <label for="email" class="login-form-label">Adresse e-mail</label>
+                    <div class="login-input-group">
+                        <i class="bi bi-envelope input-icon"></i>
+                        <input type="email" id="email" class="login-input" placeholder="nom@exemple.com" autocomplete="username" required>
+                    </div>
+                </div>
+
+                <div class="login-form-group">
+                    <label for="password" class="login-form-label">Mot de passe</label>
+                    <div class="login-input-group">
+                        <i class="bi bi-shield-lock input-icon"></i>
+                        <input type="password" id="password" class="login-input login-input-password" placeholder="••••••••" autocomplete="current-password" required>
+                        <button type="button" class="password-toggle-btn" id="toggle-password" aria-label="Afficher le mot de passe">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-login" id="btn-submit">
+                    <span>Se connecter</span>
+                    <i class="bi bi-arrow-right"></i>
+                </button>
+
+            </form>
+
+            <!-- Comptes de démonstration (rendus par login.js, uniquement en mode mock) -->
+            <section id="demo-accounts" class="d-none">
+                <div class="login-divider">Comptes de démonstration</div>
+                <div class="demo-account-grid" id="demo-account-list"></div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="assets/js/pages/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heures des enseignants - Suivi Académique</title>
+  <link rel="icon" type="image/png" href="../../assets/images/favicon.ico">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap-icons/bootstrap-icons.css">
+  <link rel="stylesheet" href="../../assets/libs/apexcharts/apexcharts.css">
+  <link rel="stylesheet" href="../../assets/libs/flatpickr/flatpickr.min.css">
+  <!-- Police : chargée sans bloquer l'affichage (la page reste utilisable hors ligne, la police se substitue) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="../../assets/css/main.css">
+</head>
+
+<body class="app-loading">
+  <!-- Sidebar, navbar et footer sont injectés par layout.js (initPage) -->
+  <div class="main-wrapper">
+    <main>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Heures des enseignants</h1>
+          <p class="page-subtitle" id="page-subtitle"></p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-start">
+          <button class="btn-date-picker" type="button" id="date-picker-trigger" aria-label="Choisir la période">
+            <i class="bi bi-calendar4-event"></i>
+            <span id="selected-date-range"></span>
+            <i class="bi bi-chevron-down ms-1"></i>
+          </button>
+          <div id="export-menu"></div>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4" id="kpis"></div>
+
+      <div class="card">
+        <div class="card-header mb-2">
+          <h3 class="card-title">Heures par enseignant</h3>
+          <div class="d-flex gap-3 align-items-center">
+            <div class="chart-legend-item"><span class="legend-dot bg-forest-medium"></span><span class="chart-legend-label">Réalisées</span></div>
+            <div class="chart-legend-item"><span class="legend-dot bg-brand-orange"></span><span class="chart-legend-label">Absences</span></div>
+          </div>
+        </div>
+        <p class="stat-hint mb-3">Sur la période choisie.</p>
+        <div id="hours-chart"></div>
+      </div>
+
+      <div class="table-card-custom">
+        <div class="table-responsive">
+          <table class="table-custom">
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+        <p class="stat-hint p-3 mb-0">Les colonnes <strong>Dues</strong> et <strong>Heures sup.</strong> se calculent sur le semestre complet, quelle que soit la période choisie : heures supplémentaires = heures réalisées au-delà du volume dû.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="../../assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="../../assets/libs/apexcharts/apexcharts.min.js"></script>
+  <script src="../../assets/libs/flatpickr/flatpickr.min.js"></script>
+  <script type="module" src="../../assets/js/pages/chef-heures.js"></script>
+</body>
+</html>

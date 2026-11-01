@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saisie des notes - Suivi Académique</title>
+  <link rel="icon" type="image/png" href="../../assets/images/favicon.ico">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../../assets/libs/bootstrap-icons/bootstrap-icons.css">
+  <!-- Police : chargée sans bloquer l'affichage (la page reste utilisable hors ligne, la police se substitue) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="../../assets/css/main.css">
+</head>
+
+<body class="app-loading">
+  <!-- Sidebar, navbar et footer sont injectés par layout.js (initPage) -->
+  <div class="main-wrapper">
+    <main>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Saisie des notes</h1>
+          <p class="page-subtitle" id="page-subtitle">Enregistrez vos notes en brouillon, puis validez-les : une note validée est verrouillée et entre dans les moyennes.</p>
+        </div>
+      </div>
+
+      <div class="table-card-custom filter-bar" id="controls" hidden>
+        <div class="table-header-control">
+          <div class="filter-bar-group filter-bar-grow">
+            <label for="select-subject" class="form-label-custom">Matière</label>
+            <select class="form-select-custom" id="select-subject"></select>
+          </div>
+          <div class="filter-bar-group">
+            <span class="form-label-custom" id="type-label">Évaluation</span>
+            <div class="segmented" role="group" aria-labelledby="type-label" id="type-buttons"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="content">
+        <div class="empty-state" aria-busy="true"><div class="spinner-border spinner-border-sm" role="status"></div><p>Chargement…</p></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../../assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="../../assets/js/pages/enseignant-saisie-notes.js"></script>
+</body>
+</html>

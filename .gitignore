@@ -1,0 +1,11 @@
+# Documents de travail internes (non publiés)
+CLAUDE.md
+contrat-api.md
+projet.md
+
+# Système et éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
