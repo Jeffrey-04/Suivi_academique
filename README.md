@@ -40,8 +40,8 @@ Transversal : exports **Excel (.xlsx) mis en forme**, CSV et agenda **.ics** · 
 Aucune installation : pas de `npm`, pas de build. Il suffit de servir le dossier (les modules ES et les données de démonstration ne fonctionnent pas en `file://`) :
 
 ```bash
-git clone <url-du-depot>
-cd School
+git clone https://github.com/Jeffrey-04/Suivi_academique.git
+cd Suivi_academique
 php -S localhost:8000        # ou : python3 -m http.server 8000
 ```
 
