@@ -18,6 +18,12 @@ export const MENTIONS = [
 
 export const round2 = (n) => Math.round(n * 100) / 100;
 
+// Arrondi EXACT : les notes ont deux décimales, on calcule en centièmes (entiers) et on arrondit une seule fois,
+// « moitié vers le haut ». Évite qu'une moyenne tombant sur un demi-centime dépende de l'ordre des additions flottantes
+// (le backend PHP applique la même méthode : les deux restent identiques au centième près).
+const toCents = (v) => Math.round(v * 100);
+const divRound = (numerator, denominator) => Math.floor((2 * numerator + denominator) / (2 * denominator));
+
 /**
  * Moyenne d'une matière pour un étudiant, à partir de SES notes VALIDÉES dans cette matière.
  * La note de rattrapage remplace celle de l'examen. Retourne null si CC ou examen manque.
@@ -30,7 +36,8 @@ export function subjectAverage(grades) {
     const cc = last('CC');
     const exam = last('RATTRAPAGE') ?? last('EXAMEN');
     if (cc === null || exam === null) return null;
-    return round2(cc * WEIGHTS.CC + exam * WEIGHTS.EXAMEN);
+    // cc × 0,3 + exam × 0,7 en centièmes : (3 × CC + 7 × EX) / 10
+    return divRound(Math.round(WEIGHTS.CC * 10) * toCents(cc) + Math.round(WEIGHTS.EXAMEN * 10) * toCents(exam), 10) / 100;
 }
 
 /**
@@ -42,8 +49,9 @@ export function generalAverage(entries) {
     const totalCoefficient = entries.reduce((sum, e) => sum + e.coefficient, 0);
     const complete = entries.length > 0 && entries.every((e) => e.average !== null);
     if (!complete) return { average: null, complete: false, totalCoefficient };
-    const weighted = entries.reduce((sum, e) => sum + e.average * e.coefficient, 0);
-    return { average: round2(weighted / totalCoefficient), complete: true, totalCoefficient };
+    const weighted = entries.reduce((sum, e) => sum + toCents(e.average) * toCents(e.coefficient), 0);
+    const coefficients = entries.reduce((sum, e) => sum + toCents(e.coefficient), 0);
+    return { average: divRound(weighted, coefficients) / 100, complete: true, totalCoefficient };
 }
 
 export function mention(average) {
@@ -68,7 +76,9 @@ function groupByUnit(lines, units) {
     const make = (unit, own) => {
         const complete = own.length > 0 && own.every((l) => l.average !== null);
         const credits = own.reduce((sum, l) => sum + l.coefficient, 0);
-        const average = complete ? round2(own.reduce((sum, l) => sum + l.average * l.coefficient, 0) / credits) : null;
+        const average = complete
+            ? divRound(own.reduce((sum, l) => sum + toCents(l.average) * toCents(l.coefficient), 0), own.reduce((sum, l) => sum + toCents(l.coefficient), 0)) / 100
+            : null;
         return { unitId: unit.id ?? null, code: unit.code ?? '', name: unit.name, type: unit.type ?? null, credits, average, validated: average !== null && average >= PASS_MARK, lines: own };
     };
     const groups = units.map((u) => make(u, lines.filter((l) => l.unitId === u.id))).filter((g) => g.lines.length);
@@ -167,7 +177,7 @@ const sum = (values) => values.reduce((total, v) => total + v, 0);
 /** Moyenne arrondie à 2 décimales en ignorant les valeurs absentes ; null s'il n'y en a aucune. */
 export function mean(values) {
     const kept = values.filter((v) => v !== null && v !== undefined);
-    return kept.length ? round2(sum(kept) / kept.length) : null;
+    return kept.length ? divRound(kept.reduce((total, v) => total + toCents(v), 0), kept.length) / 100 : null;
 }
 
 /** Lundi (ISO "YYYY-MM-DD") de la semaine qui contient la date donnée. */

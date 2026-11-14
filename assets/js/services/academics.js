@@ -16,6 +16,9 @@ import { EventService } from './calendar.js';
 import { list, replaceAll } from './data.js';
 import { ValidationError } from './errors.js';
 import { idSequence, nextId } from './ids.js';
+import { request, requestOrNull } from './api.js';
+
+const enc = encodeURIComponent;
 
 export const GRADE_TYPES = { CC: 'Contrôle continu', EXAMEN: 'Examen', RATTRAPAGE: 'Rattrapage' };
 export const SEMESTERS = ['S1', 'S2'];
@@ -50,6 +53,7 @@ function validateSubject(input, { subjects, levels, teachers, units, ownId }) {
 export const SubjectService = {
     /** filters : { levelId, teacherId, semester } */
     async list({ levelId, teacherId, semester } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/subjects', { query: { levelId, teacherId, semester } });
         let items = await list('subjects');
         if (levelId) items = items.filter((s) => s.levelId === levelId);
         if (teacherId) items = items.filter((s) => s.teacherId === teacherId);
@@ -57,10 +61,12 @@ export const SubjectService = {
         return items;
     },
     async get(id) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/subjects/${enc(id)}`);
         return (await list('subjects')).find((s) => s.id === id) ?? null;
     },
 
     async create(input) {
+        if (!config.USE_MOCK) return request('POST', '/subjects', { body: input });
         const [subjects, levels, teachers, units] = await Promise.all([list('subjects'), list('levels'), list('teachers'), list('units')]);
         const { errors, code, coefficient, hours } = validateSubject(input, { subjects, levels, teachers, units, ownId: null });
         fail(errors);
@@ -74,6 +80,7 @@ export const SubjectService = {
     },
 
     async update(id, input) {
+        if (!config.USE_MOCK) return request('PUT', `/subjects/${enc(id)}`, { body: input });
         const [subjects, levels, teachers, units] = await Promise.all([list('subjects'), list('levels'), list('teachers'), list('units')]);
         const subject = subjects.find((s) => s.id === id);
         if (!subject) throw new ValidationError('Matière introuvable.');
@@ -95,11 +102,13 @@ export const SubjectService = {
 
     /** Notes et séances rattachées : ce qui empêche la suppression et le changement de classe. */
     async usage(id) {
+        if (!config.USE_MOCK) return request('GET', `/subjects/${enc(id)}/usage`);
         const [grades, sessions] = await Promise.all([list('grades'), list('sessions')]);
         return { grades: grades.filter((g) => g.subjectId === id).length, sessions: sessions.filter((s) => s.subjectId === id).length };
     },
 
     async remove(id) {
+        if (!config.USE_MOCK) { await request('DELETE', `/subjects/${enc(id)}`); return; }
         const subjects = await list('subjects');
         if (!subjects.some((s) => s.id === id)) throw new ValidationError('Matière introuvable.');
         const usage = await this.usage(id);
@@ -138,6 +147,7 @@ function eligibleForRattrapage(grades, studentId) {
 export const GradeService = {
     /** filters : { studentId, subjectId, subjectIds, status } */
     async list({ studentId, subjectId, subjectIds, status } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/grades', { query: { studentId, subjectId, subjectIds, status } });
         let items = await list('grades');
         if (studentId) items = items.filter((g) => g.studentId === studentId);
         if (subjectId) items = items.filter((g) => g.subjectId === subjectId);
@@ -146,6 +156,7 @@ export const GradeService = {
         return items;
     },
     async countByStatus() {
+        if (!config.USE_MOCK) return request('GET', '/grades/counts');
         const counts = { brouillon: 0, validee: 0 };
         (await list('grades')).forEach((g) => { counts[g.status] = (counts[g.status] ?? 0) + 1; });
         return counts;
@@ -156,6 +167,7 @@ export const GradeService = {
      * sa moyenne (notes validées seulement) et son éligibilité au rattrapage.
      */
     async sheet(subjectId) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/subjects/${enc(subjectId)}/grade-sheet`);
         const [subjects, students, grades, levels, filieres, teachers] = await Promise.all([
             list('subjects'), list('students'), list('grades'), list('levels'), list('filieres'), list('teachers'),
         ]);
@@ -193,6 +205,7 @@ export const GradeService = {
      * (clé = studentId).
      */
     async saveDrafts({ subjectId, type, entries }, actor) {
+        if (!config.USE_MOCK) return request('PUT', `/subjects/${enc(subjectId)}/grades/${enc(type)}`, { body: { entries } });
         const [subjects, students, grades] = await Promise.all([list('subjects'), list('students'), list('grades')]);
         const subject = subjects.find((s) => s.id === subjectId);
         if (!subject) throw new ValidationError('Matière introuvable.');
@@ -239,6 +252,7 @@ export const GradeService = {
 
     /** Valide (et verrouille) tous les brouillons d'une évaluation. Retourne { validated }. */
     async validate({ subjectId, type }, actor) {
+        if (!config.USE_MOCK) return request('POST', `/subjects/${enc(subjectId)}/grades/${enc(type)}/validate`, { body: {} });
         const [subjects, grades] = await Promise.all([list('subjects'), list('grades')]);
         const subject = subjects.find((s) => s.id === subjectId);
         if (!subject) throw new ValidationError('Matière introuvable.');
@@ -252,6 +266,7 @@ export const GradeService = {
 
     /** Notes validées d'un étudiant, de la plus récente à la plus ancienne, avec matière et enseignant. */
     async studentHistory(studentId) {
+        if (!config.USE_MOCK) return request('GET', `/students/${enc(studentId)}/grades/history`);
         const [grades, subjects, teachers] = await Promise.all([list('grades'), list('subjects'), list('teachers')]);
         return grades
             .filter((g) => g.studentId === studentId && g.status === 'validee')
@@ -322,15 +337,18 @@ function overviewRows(ctx) {
 
 export const BulletinService = {
     list: async ({ studentId } = {}) => {
+        if (!config.USE_MOCK) return request('GET', '/bulletins', { query: { studentId } });
         const items = await list('bulletins');
         return studentId ? items.filter((b) => b.studentId === studentId) : items;
     },
     async count() {
+        if (!config.USE_MOCK) return (await request('GET', '/bulletins/count')).count;
         return (await list('bulletins')).length;
     },
 
     /** Vue d'ensemble pour le chef : une ligne par étudiant (voir BULLETIN_STATUS). */
     async overview(semester = config.CURRENT_SEMESTER) {
+        if (!config.USE_MOCK) return request('GET', '/bulletins/overview', { query: { semester } });
         return overviewRows(await loadBulletinContext(semester));
     },
 
@@ -339,6 +357,7 @@ export const BulletinService = {
      * généré à une date donnée). Retourne { student, report, bulletin|null }.
      */
     async getReport(studentId, semester = config.CURRENT_SEMESTER) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/students/${enc(studentId)}/report`, { query: { semester } });
         const ctx = await loadBulletinContext(semester);
         const row = overviewRows(ctx).find((r) => r.student.id === studentId);
         return row ? { student: row.student, report: row.report, bulletin: row.bulletin } : null;
@@ -351,6 +370,7 @@ export const BulletinService = {
      * Retourne { generated, regenerated, skipped: [{ student, reason }] }.
      */
     async generate({ studentIds = null, semester = config.CURRENT_SEMESTER } = {}, actor) {
+        if (!config.USE_MOCK) return request('POST', '/bulletins/generate', { body: { studentIds, semester } });
         if (actor?.role !== 'chef') throw new ValidationError('Seul le chef de département peut générer les bulletins.');
         const ctx = await loadBulletinContext(semester);
         const rows = overviewRows(ctx).filter((r) => (studentIds ? studentIds.includes(r.student.id) : ['ready', 'outdated'].includes(r.status)));
@@ -381,6 +401,7 @@ export const BulletinService = {
      * n'est pas généré). Retourne null si l'étudiant n'existe pas.
      */
     async detail(studentId, semester = config.CURRENT_SEMESTER) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/students/${enc(studentId)}/bulletin`, { query: { semester } });
         const ctx = await loadBulletinContext(semester);
         const row = overviewRows(ctx).find((r) => r.student.id === studentId);
         if (!row) return null;
@@ -401,6 +422,7 @@ export const BulletinService = {
      * outdated = true si des notes ont changé depuis la génération.
      */
     async getDocument(studentId, semester = config.CURRENT_SEMESTER) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/students/${enc(studentId)}/bulletin/document`, { query: { semester } });
         const ctx = await loadBulletinContext(semester);
         const row = overviewRows(ctx).find((r) => r.student.id === studentId);
         return row?.bulletin ? documentOf(ctx, row) : null;

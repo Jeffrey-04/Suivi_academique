@@ -1,0 +1,80 @@
+<?php
+/**
+ * Exemple de configuration locale (production ou développement).
+ *
+ * UTILISATION :
+ *   1. Copier ce fichier sous le nom « config.local.php » (même dossier).
+ *   2. Remplir les valeurs de VOTRE hébergement. Ne gardez que ce que vous changez : le reste vient de config.php.
+ *   3. NE JAMAIS publier ni versionner config.local.php (il contient des identifiants et des clés secrètes).
+ *
+ * Chaque valeur peut aussi être fournie par une variable d'environnement (voir config.php).
+ */
+
+return [
+    // -------------------------------------------------------------------------
+    // Base de données MySQL / MariaDB
+    // -------------------------------------------------------------------------
+    // InfinityFree : l'hôte n'est PAS « localhost » mais « sqlXXX.infinityfree.com » (hPanel > MySQL Databases).
+    'db' => [
+        'host'     => 'sql123.infinityfree.com',
+        'port'     => 3306,
+        'dbname'   => 'if0_12345678_suivi',
+        'username' => 'if0_12345678',
+        'password' => 'MotDePasseDeLaBase',
+        'charset'  => 'utf8mb4',
+    ],
+
+    // -------------------------------------------------------------------------
+    // Installation : clé exigée par install.php quand il est ouvert depuis Internet
+    // (inutile depuis localhost). Choisissez une longue valeur aléatoire ; elle ne sert qu'une fois.
+    // -------------------------------------------------------------------------
+    'install_key' => 'CHANGEZ-MOI-clé-aléatoire-longue',
+
+    // -------------------------------------------------------------------------
+    // Rappels J-7 / J-1 : jeton de l'URL du cron  …/backend/cron/reminders.php?token=JETON
+    // à faire appeler chaque jour par un service de cron externe (cron-job.org, gratuit).
+    // Générez-le par exemple avec : php -r "echo bin2hex(random_bytes(16));"
+    // -------------------------------------------------------------------------
+    'cron_token' => '',
+
+    // -------------------------------------------------------------------------
+    // E-mails (mot de passe temporaire à la création / réinitialisation d'un compte).
+    // Les hébergements gratuits bloquent l'envoi direct : on utilise l'API HTTP gratuite de Brevo
+    // (300 e-mails/jour, https://www.brevo.com) : créer un compte, valider une adresse d'expédition
+    // (Expéditeurs et IP), puis créer une clé d'API (SMTP et API > Clés d'API).
+    // provider : 'brevo' | 'log' (développement : écrit dans storage/logs/app.log, mot de passe en clair) | 'none'
+    // -------------------------------------------------------------------------
+    'mail' => [
+        'provider'   => 'brevo',
+        'api_key'    => 'xkeysib-…',
+        'from_email' => 'adresse-validée-chez-brevo@votre-domaine.cm',
+        'from_name'  => 'Suivi Académique',
+        'app_url'    => 'https://votre-site.infinityfreeapp.com', // lien de connexion dans l'e-mail
+    ],
+
+    // -------------------------------------------------------------------------
+    // Paramètres académiques (renvoyés au frontend : source unique de vérité)
+    // -------------------------------------------------------------------------
+    'academic_year'    => '2026-2027',
+    'current_semester' => 'S1',
+    'semester_start'   => '2026-09-14',
+    'department'       => 'Département Informatique',
+
+    // -------------------------------------------------------------------------
+    // Établissement (imprimé sur les relevés de notes) : REMPLACEZ les valeurs fictives de démonstration.
+    // La position du campus et le rayon servent à « Marquer ma présence » (maxAccuracy : précision GPS tolérée, en mètres).
+    // -------------------------------------------------------------------------
+    // 'institution' => [
+    //     'university' => ['fr' => 'UNIVERSITÉ DE …', 'en' => 'UNIVERSITY OF …'],
+    //     'faculty'    => ['fr' => 'FACULTÉ DES …',   'en' => 'FACULTY OF …'],
+    //     'domain'     => ['fr' => 'SCIENCES …',      'en' => 'SCIENCES …'],
+    //     'location'   => ['name' => 'Campus central', 'lat' => 3.8667, 'lng' => 11.5167, 'radiusMeters' => 300, 'maxAccuracy' => 100],
+    //     'dean'       => ['title' => ['fr' => 'Le Doyen', 'en' => 'The Dean'], 'name' => 'Pr. …'],
+    // ],
+
+    // -------------------------------------------------------------------------
+    // Avancé
+    // -------------------------------------------------------------------------
+    // 'cors'  => ['allowed_origins' => ['https://autre-domaine.cm']], // seulement si le frontend est sur un AUTRE domaine
+    // 'debug' => true,                                                // détail des erreurs dans les réponses : développement seulement
+];

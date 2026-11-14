@@ -1,0 +1,40 @@
+# Suivi Académique : réglages Apache à la racine du site (frontend + backend dans un seul arbre).
+Options -Indexes
+
+# 1. HTTPS obligatoire (la géolocalisation « Marquer ma présence » l'exige) : désactivé en local
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:[0-9]+)?$
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # 2. Dossiers et fichiers internes : jamais servis (le backend a en plus son propre .htaccess)
+    RewriteRule ^(tools|\.git|\.github|backend/(src|config|database|storage|tests|docs|postman))(/|$) - [F,L]
+    RewriteRule ^backend/[^/]+\.(md|json)$ - [F,L]
+</IfModule>
+
+<FilesMatch "(^\.|\.(md|mjs|log|lock|sql|example|sh)$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 3. Types MIME : les modules JavaScript natifs exigent text/javascript
+<IfModule mod_mime.c>
+    AddType text/javascript .js .mjs
+</IfModule>
+
+# 4. En-têtes de sécurité
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "same-origin"
+    Header always set Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+</IfModule>
+
+ErrorDocument 404 /page-404.html

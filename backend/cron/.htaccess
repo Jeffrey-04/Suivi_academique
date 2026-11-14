@@ -1,0 +1,9 @@
+# Seul reminders.php est appelable (il exige un jeton) ; le reste est refusé par backend/.htaccess
+<Files "reminders.php">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Allow from all
+    </IfModule>
+</Files>

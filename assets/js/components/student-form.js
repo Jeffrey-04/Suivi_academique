@@ -7,6 +7,7 @@ import { ReferenceService, StudentService } from '../services/index.js';
 import { confirmDialog, openFormModal, toast } from '../utils/dialogs.js';
 import { esc, formatNumber } from '../utils/format.js';
 import { inputField, selectField } from './fields.js';
+import { showTemporaryPassword } from './temp-password.js';
 
 /** @returns {Promise<object|null>} l'étudiant enregistré, ou null si annulé */
 export async function openStudentForm(student = null) {
@@ -26,9 +27,9 @@ export async function openStudentForm(student = null) {
         ${selectField({ label: 'Filière', id: 'f-filiere', value: current?.filiereId ?? '', required: true, options: filieres.map((f) => ({ value: f.id, label: f.name })) })}
         ${selectField({ label: 'Niveau', name: 'levelId', value: student?.levelId ?? '', required: true, options: current ? levelOptions(current.filiereId) : [], placeholder: 'Choisir d\'abord une filière' })}
       </div>
-      <p class="stat-hint mt-3 mb-0">Un compte de connexion est créé avec l'adresse e-mail saisie (mot de passe temporaire en mode démo).</p>`;
+      <p class="stat-hint mt-3 mb-0">Un compte de connexion est créé avec l'adresse e-mail saisie (mot de passe temporaire, communiqué par e-mail et affiché une fois).</p>`;
 
-    return openFormModal({
+    const saved = await openFormModal({
         title: student ? "Modifier l'étudiant" : 'Ajouter un étudiant',
         submitLabel: student ? 'Enregistrer' : 'Ajouter',
         size: 'modal-lg',
@@ -49,6 +50,11 @@ export async function openStudentForm(student = null) {
             return saved;
         },
     });
+    // Compte créé : le mot de passe temporaire n'est montré qu'ici, une seule fois
+    if (saved?.temporaryPassword) {
+        await showTemporaryPassword({ name: `${saved.firstName} ${saved.lastName}`, email: saved.email, password: saved.temporaryPassword, emailSent: saved.emailSent });
+    }
+    return saved;
 }
 
 /** Demande confirmation puis supprime l'étudiant (et ses notes, bulletins, compte). Retourne true si supprimé. */

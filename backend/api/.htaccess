@@ -1,0 +1,28 @@
+# Réécriture Apache pour l'API REST de Suivi Académique
+# Fonctionne quelle que soit la profondeur dans htdocs/
+# (racine /api/, /backend/api/, /monsite/backend/api/, etc.)
+
+# L'API est publique (l'authentification est gérée par l'application)
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Allow from all
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Passer toutes les requêtes non-fichier et non-dossier à index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Désactiver l'indexation du répertoire
+Options -Indexes
+
+# Autoriser les en-têtes nécessaires pour CORS et cookies de session
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>

@@ -16,6 +16,9 @@ import { config } from '../config.js';
 import { normalize } from '../utils/format.js';
 import { list, replaceAll } from './data.js';
 import { ValidationError } from './errors.js';
+import { request, requestOrNull } from './api.js';
+
+const enc = encodeURIComponent;
 
 export const DEFAULT_PHOTO = 'assets/images/avatar.png';
 export const PASSWORD_MIN = 8;
@@ -63,6 +66,7 @@ function temporaryPassword() {
 export const AccountService = {
     /** Profil complet de l'utilisateur : compte public + fiche étudiant / enseignant + réglages effectifs. */
     async profile(userId) {
+        if (!config.USE_MOCK) return request('GET', '/me/profile'); // toujours le profil de l'utilisateur connecté
         const [users, students, teachers, levels, filieres] = await Promise.all([list('users'), list('students'), list('teachers'), list('levels'), list('filieres')]);
         const user = await findUser(users, userId);
         let person = null;
@@ -79,6 +83,7 @@ export const AccountService = {
 
     /** Coordonnées : e-mail (mot de passe actuel exigé s'il change) et téléphone (étudiants / enseignants). */
     async updateContact(userId, input, actor) {
+        if (!config.USE_MOCK) return request('PATCH', '/me/contact', { body: input });
         requireSelf(actor, userId);
         const [users, students, teachers] = await Promise.all([list('users'), list('students'), list('teachers')]);
         const user = await findUser(users, userId);
@@ -102,6 +107,7 @@ export const AccountService = {
 
     /** Photo : data URL d'une image (déjà réduite par l'interface) ou null pour revenir à l'image par défaut. */
     async updatePhoto(userId, dataUrl, actor) {
+        if (!config.USE_MOCK) return request('PUT', '/me/photo', { body: { photo: dataUrl } });
         requireSelf(actor, userId);
         if (dataUrl !== null && !(/^data:image\/(png|jpeg|webp);base64,/.test(String(dataUrl)) && String(dataUrl).length <= MAX_PHOTO_LENGTH)) {
             throw new ValidationError('Image refusée : formats PNG, JPEG ou WebP, 200 Ko maximum.');
@@ -117,6 +123,7 @@ export const AccountService = {
     },
 
     async changePassword(userId, input, actor) {
+        if (!config.USE_MOCK) { await request('PUT', '/me/password', { body: input }); return; }
         requireSelf(actor, userId);
         const users = await list('users');
         const user = await findUser(users, userId);
@@ -135,6 +142,13 @@ export const AccountService = {
     },
 
     async updateSettings(userId, input, actor) {
+        if (!config.USE_MOCK) {
+            const checked = (v) => v === true || v === '1' || v === 'on'; // une case décochée est absente du formulaire
+            return request('PUT', '/me/settings', { body: {
+                announcements: checked(input.announcements), reminders: [].concat(input.reminders ?? []).map(Number),
+                calendarView: input.calendarView, sidebarCollapsed: checked(input.sidebarCollapsed),
+            } });
+        }
         requireSelf(actor, userId);
         const users = await list('users');
         const user = await findUser(users, userId);
@@ -158,6 +172,7 @@ export const AccountService = {
 
     /** Comptes avec un libellé d'identité (matricule, grade). Filtres : q (nom, e-mail), role, active (true/false). */
     async list({ q, role, active } = {}, actor) {
+        if (!config.USE_MOCK) return request('GET', '/accounts', { query: { q, role, active } });
         requireChef(actor, 'consulter les comptes');
         const [users, students, teachers] = await Promise.all([list('users'), list('students'), list('teachers')]);
         const needle = normalize(text(q));
@@ -175,6 +190,7 @@ export const AccountService = {
 
     /** Active ou désactive un compte. Le chef ne peut pas désactiver le sien. */
     async setActive(userId, active, actor) {
+        if (!config.USE_MOCK) return request('PATCH', `/accounts/${enc(userId)}`, { body: { active: Boolean(active) } });
         requireChef(actor, 'activer ou désactiver un compte');
         if (userId === actor.id) throw new ValidationError('Vous ne pouvez pas désactiver votre propre compte.');
         const users = await list('users');
@@ -186,6 +202,7 @@ export const AccountService = {
 
     /** Réinitialise le mot de passe : retourne le mot de passe temporaire, à communiquer à l'utilisateur (affiché une seule fois). */
     async resetPassword(userId, actor) {
+        if (!config.USE_MOCK) return request('POST', `/accounts/${enc(userId)}/reset-password`, { body: {} });
         requireChef(actor, 'réinitialiser un mot de passe');
         if (userId === actor.id) throw new ValidationError('Pour changer votre mot de passe, passez par votre profil.');
         const users = await list('users');

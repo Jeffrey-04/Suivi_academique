@@ -10,6 +10,9 @@ import { BulletinService } from './academics.js';
 import { EventService } from './calendar.js';
 import { list } from './data.js';
 import { ReferenceService } from './people.js';
+import { request, requestOrNull } from './api.js';
+
+const enc = encodeURIComponent;
 
 const byId = (items) => new Map(items.map((i) => [i.id, i]));
 const period = () => `${config.CURRENT_SEMESTER}-${config.ACADEMIC_YEAR}`;
@@ -19,6 +22,7 @@ const values = (grades, type) => grades.filter((g) => g.type === type).map((g) =
 export const StatsService = {
     /** Série hebdomadaire des séances (toutes, ou celles d'un enseignant, sur [from, to]) : heures, absences, taux de présence. */
     async teachingWeekly({ teacherId, from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/stats/teaching-weekly', { query: { teacherId, from, to } });
         let sessions = inRange(await list('sessions'), from, to);
         if (teacherId) sessions = sessions.filter((s) => s.teacherId === teacherId);
         const weeks = new Map();
@@ -36,6 +40,7 @@ export const StatsService = {
 
     /** Moyenne des notes validées de contrôle continu et d'examen, par classe. */
     async classAverages() {
+        if (!config.USE_MOCK) return request('GET', '/stats/class-averages');
         const [levels, filieres, students, grades] = await Promise.all([list('levels'), list('filieres'), list('students'), list('grades')]);
         const filiereById = byId(filieres);
         const validated = grades.filter((g) => g.status === 'validee');
@@ -55,12 +60,14 @@ export const StatsService = {
 
     /** Moyenne générale des notes validées : contrôle continu puis examen (progression ou régression entre les deux). */
     async gradeProgress() {
+        if (!config.USE_MOCK) return request('GET', '/stats/grade-progress');
         const validated = (await list('grades')).filter((g) => g.status === 'validee');
         return { cc: mean(values(validated, 'CC')), exam: mean(values(validated, 'EXAMEN')) };
     },
 
     /** Répartition des résultats du semestre + bulletins à générer ou à régénérer. */
     async departmentResults(semester = config.CURRENT_SEMESTER) {
+        if (!config.USE_MOCK) return request('GET', '/stats/department-results', { query: { semester } });
         const rows = await BulletinService.overview(semester);
         const counts = { Admis: 0, Rattrapage: 0, Ajourné: 0, Incomplet: 0 };
         rows.forEach((row) => { counts[row.report.result] += 1; });
@@ -73,6 +80,7 @@ export const StatsService = {
 
     /** Dernières absences d'enseignants sur [from, to], de la plus récente à la plus ancienne. */
     async recentAbsences(limit = 5, { from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/stats/recent-absences', { query: { limit, from, to } });
         const [sessions, teachers, subjects] = await Promise.all([list('sessions'), list('teachers'), list('subjects')]);
         const teacherById = byId(teachers);
         const subjectById = byId(subjects);
@@ -88,6 +96,7 @@ export const StatsService = {
      * (toutes les séances de la période), les plus en retard d'abord.
      */
     async hoursProgress(limit = 6, { from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/stats/hours-progress', { query: { limit, from, to } });
         const [teachers, sessions] = await Promise.all([list('teachers'), list('sessions')]);
         const inPeriod = inRange(sessions, from, to);
         return teachers
@@ -108,6 +117,7 @@ export const StatsService = {
      * attendu = 2 notes (CC + examen) par étudiant ; rattrapage non compté.
      */
     async subjectRows() {
+        if (!config.USE_MOCK) return request('GET', '/stats/subject-rows');
         const [subjects, teachers, students, grades, classes] = await Promise.all([
             list('subjects'), list('teachers'), list('students'), list('grades'), ReferenceService.classes(),
         ]);
@@ -130,6 +140,7 @@ export const StatsService = {
 
     /** Une ligne par enseignant pour la liste : matières, bilan d'heures du semestre, taux de présence, absences. */
     async teacherRows() {
+        if (!config.USE_MOCK) return request('GET', '/stats/teacher-rows');
         const [teachers, subjects, sessions] = await Promise.all([list('teachers'), list('subjects'), list('sessions')]);
         return teachers.map((teacher) => {
             const own = sessions.filter((s) => s.teacherId === teacher.id);
@@ -149,6 +160,7 @@ export const StatsService = {
      * Retourne { rows, totals }.
      */
     async hoursOverview({ from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/stats/hours-overview', { query: { from, to } });
         const [teachers, subjects, sessions] = await Promise.all([list('teachers'), list('subjects'), list('sessions')]);
         const inPeriod = inRange(sessions, from, to);
         const hours = (items) => round2(items.reduce((total, s) => total + sessionHours(s), 0));
@@ -177,6 +189,7 @@ export const StatsService = {
 
     /** Dernières séances d'un enseignant sur [from, to]. */
     async recentSessions(teacherId, limit = 5, { from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', `/stats/teachers/${enc(teacherId)}/recent-sessions`, { query: { limit, from, to } });
         const [sessions, subjects] = await Promise.all([list('sessions'), list('subjects')]);
         const subjectById = byId(subjects);
         return inRange(sessions, from, to)
@@ -188,6 +201,7 @@ export const StatsService = {
 
     /** Vue d'ensemble d'un enseignant : ses matières (moyennes, validation des notes) et répartition des examens. */
     async teacherOverview(teacherId) {
+        if (!config.USE_MOCK) return request('GET', `/stats/teachers/${enc(teacherId)}/overview`);
         const [subjects, students, grades, levels, filieres, sessions] = await Promise.all([
             list('subjects'), list('students'), list('grades'), list('levels'), list('filieres'), list('sessions'),
         ]);
@@ -229,8 +243,9 @@ export const StatsService = {
 
     /** Vue d'ensemble d'un étudiant : relevé, moyenne de sa classe par matière, progression CC -> examen. */
     async studentOverview(studentId, semester = config.CURRENT_SEMESTER) {
-        const [students, subjects, grades, levels, filieres, bulletins, rattrapageOpen] = await Promise.all([
-            list('students'), list('subjects'), list('grades'), list('levels'), list('filieres'), list('bulletins'), EventService.rattrapageOpen(),
+        if (!config.USE_MOCK) return requestOrNull('GET', `/stats/students/${enc(studentId)}/overview`, { query: { semester } });
+        const [students, subjects, grades, levels, filieres, bulletins, units, rattrapageOpen] = await Promise.all([
+            list('students'), list('subjects'), list('grades'), list('levels'), list('filieres'), list('bulletins'), list('units'), EventService.rattrapageOpen(),
         ]);
         const student = students.find((s) => s.id === studentId);
         if (!student) return null;
@@ -239,7 +254,8 @@ export const StatsService = {
         const classSubjects = subjects.filter((s) => s.levelId === student.levelId && s.semester === semester);
         const classmates = students.filter((s) => s.levelId === student.levelId);
 
-        const reportOf = (id) => buildReport({ subjects: classSubjects, grades: grades.filter((g) => g.studentId === id), rattrapageOpen });
+        const classUnits = units.filter((u) => u.levelId === student.levelId && u.semester === semester);
+        const reportOf = (id) => buildReport({ subjects: classSubjects, grades: grades.filter((g) => g.studentId === id), rattrapageOpen, units: classUnits });
         const report = reportOf(studentId);
         const classReports = classmates.map((c) => reportOf(c.id));
         const lines = report.lines.map((line, i) => ({

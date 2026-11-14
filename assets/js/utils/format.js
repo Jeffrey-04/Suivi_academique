@@ -19,9 +19,10 @@ export function toISODate(date) {
     return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 }
 
-/** Aujourd'hui (minuit local) : date simulée en mode mock, vraie date sinon. */
+/** Aujourd'hui (minuit local) : date simulée en mode mock, date du serveur avec le backend, vraie date en dernier recours. */
 export function today() {
-    if (config.USE_MOCK && config.MOCK_TODAY) return parseDate(config.MOCK_TODAY);
+    const fixed = config.USE_MOCK ? config.MOCK_TODAY : config.SERVER_TODAY;
+    if (fixed) return parseDate(fixed);
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }

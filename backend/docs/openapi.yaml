@@ -1,0 +1,999 @@
+openapi: 3.0.3
+info:
+  title: Suivi Académique API
+  version: 1.0.0
+  description: |
+    API REST PHP de l'application Suivi Académique.
+
+    Les routes privées utilisent une session PHP transmise par cookie
+    `SUIVI_SESSID`. Connectez-vous sur `POST /auth/login` avant d'appeler les
+    routes privées. Les permissions de rôle et de périmètre sont vérifiées par
+    le backend.
+  contact:
+    name: TYITYI Liano — Backend
+    url: https://github.com/Liano-T
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: http://localhost/Suivi%20Academique/Suivi%20academique%20Backend/api
+    description: Laragon local (adapter le chemin si le dossier diffère)
+  - url: https://{host}/{backendPath}/api
+    description: Serveur déployé
+    variables:
+      host:
+        default: example.com
+      backendPath:
+        default: backend
+tags:
+  - name: Configuration
+  - name: Authentification
+  - name: Référentiels
+  - name: Étudiants
+  - name: Enseignants
+  - name: Matières
+  - name: Notes
+  - name: Bulletins
+  - name: Séances et heures
+  - name: Présences
+  - name: Calendrier et notifications
+  - name: Comptes et profil
+  - name: Statistiques
+paths:
+  /config:
+    get:
+      tags: [Configuration]
+      summary: Configuration publique de l'instance
+      description: >
+        Aucune connexion requise. Renvoie le mode (`demo` / `production`), la date du jour du serveur (simulée en mode démonstration),
+        l'année et le semestre, l'identité de l'établissement, la position du campus et, en mode démonstration seulement,
+        les comptes de démonstration. Ne contient aucun secret. Le frontend la charge au démarrage.
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+  /auth/login:
+    post:
+      tags: [Authentification]
+      summary: Ouvrir une session
+      description: Vérifie l'adresse e-mail et le mot de passe puis pose le cookie de session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: chef@dept-info.demo }
+                password: { type: string, format: password, example: demo1234 }
+      responses:
+        "200":
+          description: Connexion réussie ; cookie de session défini.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429":
+          description: Trop d'échecs de connexion pour cette adresse (5 en 15 minutes) ; en-tête `Retry-After` en secondes.
+  /auth/logout:
+    post:
+      tags: [Authentification]
+      summary: Fermer la session courante
+      responses:
+        "204": { description: Session fermée. }
+  /auth/me:
+    get:
+      tags: [Authentification]
+      summary: Lire l'utilisateur connecté
+      responses:
+        "200":
+          description: Utilisateur de la session.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /filieres:
+    get:
+      tags: [Référentiels]
+      summary: Lister les filières
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /levels:
+    get:
+      tags: [Référentiels]
+      summary: Lister les niveaux
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /classes:
+    get:
+      tags: [Référentiels]
+      summary: Lister les classes avec leur filière
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /units:
+    get:
+      tags: [Référentiels]
+      summary: Lister les unités d'enseignement
+      parameters:
+        - { $ref: "#/components/parameters/LevelIdQuery" }
+        - { name: semester, in: query, schema: { type: string, enum: [S1, S2] } }
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /students/count:
+    get:
+      tags: [Étudiants]
+      summary: Compter les étudiants (chef)
+      responses:
+        "200":
+          description: Nombre total.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer, example: 54 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /students:
+    get:
+      tags: [Étudiants]
+      summary: Lister les étudiants visibles par le rôle courant
+      parameters:
+        - { $ref: "#/components/parameters/FiliereIdQuery" }
+        - { $ref: "#/components/parameters/LevelIdQuery" }
+        - { name: q, in: query, description: Recherche textuelle insensible à la casse et aux accents., schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Étudiants]
+      summary: Créer un étudiant (chef)
+      description: Le backend valide les champs et génère le matricule ainsi que le compte associé.
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201":
+          description: "Étudiant créé : champs habituels de la fiche, plus `temporaryPassword` (affiché une seule fois) et `emailSent`."
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  id: { type: string }
+                  temporaryPassword: { type: string, description: "Affiché une seule fois" }
+                  emailSent: { type: boolean }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /students/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      tags: [Étudiants]
+      summary: Lire un étudiant
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Étudiants]
+      summary: Modifier un étudiant (chef)
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Étudiants]
+      summary: Supprimer un étudiant (chef)
+      responses:
+        "204": { description: Étudiant supprimé. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /students/{id}/removal-impact:
+    get:
+      tags: [Étudiants]
+      summary: Vérifier les dépendances avant suppression
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /teachers:
+    get:
+      tags: [Enseignants]
+      summary: Lister les enseignants visibles par le rôle courant
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Enseignants]
+      summary: Créer un enseignant (chef)
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201":
+          description: "Enseignant créé : champs habituels de la fiche, plus `temporaryPassword` (affiché une seule fois) et `emailSent`."
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  id: { type: string }
+                  temporaryPassword: { type: string, description: "Affiché une seule fois" }
+                  emailSent: { type: boolean }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /teachers/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      tags: [Enseignants]
+      summary: Lire un enseignant
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Enseignants]
+      summary: Modifier un enseignant (chef)
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Enseignants]
+      summary: Supprimer un enseignant (chef)
+      responses:
+        "204": { description: Enseignant supprimé. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /teachers/{id}/usage:
+    get:
+      tags: [Enseignants]
+      summary: Consulter les dépendances d'un enseignant
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /subjects:
+    get:
+      tags: [Matières]
+      summary: Lister les matières accessibles
+      parameters:
+        - { $ref: "#/components/parameters/LevelIdQuery" }
+        - { name: semester, in: query, schema: { type: string, enum: [S1, S2] } }
+        - { name: teacherId, in: query, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Matières]
+      summary: Créer une matière (chef)
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /subjects/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      tags: [Matières]
+      summary: Lire une matière
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Matières]
+      summary: Modifier une matière (chef)
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Matières]
+      summary: Supprimer une matière (chef)
+      responses:
+        "204": { description: Matière supprimée. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /subjects/{id}/usage:
+    get:
+      tags: [Matières]
+      summary: Consulter les dépendances d'une matière
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /subjects/{id}/grade-sheet:
+    get:
+      tags: [Notes]
+      summary: Charger le relevé de notes par matière
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /subjects/{id}/grades/{type}:
+    put:
+      tags: [Notes]
+      summary: Enregistrer les notes en brouillon
+      description: Le type de note est CC, EXAMEN ou RATTRAPAGE. Voir le contrôleur pour le schéma détaillé des lignes.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - name: type
+          in: path
+          required: true
+          schema: { type: string, enum: [CC, EXAMEN, RATTRAPAGE] }
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /subjects/{id}/grades/{type}/validate:
+    post:
+      tags: [Notes]
+      summary: Valider les notes saisies
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - name: type
+          in: path
+          required: true
+          schema: { type: string, enum: [CC, EXAMEN, RATTRAPAGE] }
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /grades:
+    get:
+      tags: [Notes]
+      summary: Lister les notes accessibles
+      parameters:
+        - { name: studentId, in: query, schema: { type: string } }
+        - { name: subjectId, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [brouillon, validee] } }
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /grades/counts:
+    get:
+      tags: [Notes]
+      summary: Compter les notes par statut (chef)
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /students/{id}/grades/history:
+    get:
+      tags: [Notes]
+      summary: Historique des notes d'un étudiant
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /bulletins:
+    get:
+      tags: [Bulletins]
+      summary: Lister les bulletins accessibles
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /bulletins/generate:
+    post:
+      tags: [Bulletins]
+      summary: Générer ou actualiser des bulletins (chef)
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /bulletins/count:
+    get:
+      tags: [Bulletins]
+      summary: Compter les bulletins (chef)
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /bulletins/overview:
+    get:
+      tags: [Bulletins]
+      summary: Synthèse des bulletins (chef)
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /students/{id}/report:
+    get:
+      tags: [Bulletins]
+      summary: Construire le relevé de notes d'un étudiant
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /students/{id}/bulletin:
+    get:
+      tags: [Bulletins]
+      summary: Lire le bulletin d'un étudiant
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /students/{id}/bulletin/document:
+    get:
+      tags: [Bulletins]
+      summary: Télécharger le document du bulletin
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Document du bulletin généré par le backend.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /sessions:
+    get:
+      tags: [Séances et heures]
+      summary: Lister les séances accessibles
+      parameters:
+        - { name: teacherId, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/SubjectIdQuery" }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Séances et heures]
+      summary: Déclarer une séance
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /sessions/detailed:
+    get:
+      tags: [Séances et heures]
+      summary: Lister les séances avec leurs détails
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /sessions/stats:
+    get:
+      tags: [Séances et heures]
+      summary: Statistiques des séances
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /sessions/absences:
+    post:
+      tags: [Séances et heures]
+      summary: Enregistrer une absence
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /sessions/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      tags: [Séances et heures]
+      summary: Lire une séance
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Séances et heures]
+      summary: Modifier une séance
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Séances et heures]
+      summary: Supprimer une séance
+      responses:
+        "204": { description: Séance supprimée. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /teachers/{id}/hours:
+    get:
+      tags: [Séances et heures]
+      summary: Consulter le volume horaire d'un enseignant
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /hours:
+    get:
+      tags: [Séances et heures]
+      summary: Synthèse des heures du département (chef)
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /institution/location:
+    get:
+      tags: [Présences]
+      summary: Lire les coordonnées de l'établissement
+      responses:
+        "200":
+          description: Localisation et rayon autorisé.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name: { type: string }
+                  lat: { type: number }
+                  lng: { type: number }
+                  radiusMeters: { type: integer }
+                  maxAccuracy: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /checkins:
+    get:
+      tags: [Présences]
+      summary: Lister les pointages accessibles
+      parameters:
+        - { name: teacherId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Présences]
+      summary: Pointer sa présence (enseignant)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subjectId, lat, lng, accuracy]
+              properties:
+                subjectId: { type: string, example: sub-001 }
+                lat: { type: number, example: 3.8667 }
+                lng: { type: number, example: 11.5167 }
+                accuracy: { type: number, description: Précision GPS en mètres., example: 20 }
+      responses:
+        "201": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /events:
+    get:
+      tags: [Calendrier et notifications]
+      summary: Lister les événements accessibles
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Calendrier et notifications]
+      summary: Créer un événement
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /events/rattrapage-open:
+    get:
+      tags: [Calendrier et notifications]
+      summary: Vérifier si la période de rattrapage est ouverte
+      responses:
+        "200":
+          description: État de la période.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  open: { type: boolean, example: false }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /events/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      tags: [Calendrier et notifications]
+      summary: Lire un événement
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Calendrier et notifications]
+      summary: Modifier un événement
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Calendrier et notifications]
+      summary: Supprimer un événement
+      responses:
+        "204": { description: Événement supprimé. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /events/{id}/notification-count:
+    get:
+      tags: [Calendrier et notifications]
+      summary: Compter les notifications liées à un événement
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /notifications:
+    get:
+      tags: [Calendrier et notifications]
+      summary: Lister les notifications de l'utilisateur connecté
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /notifications/unread-count:
+    get:
+      tags: [Calendrier et notifications]
+      summary: Compter les notifications non lues
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /notifications/read-all:
+    post:
+      tags: [Calendrier et notifications]
+      summary: Marquer toutes les notifications comme lues
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /notifications/{id}/read:
+    post:
+      tags: [Calendrier et notifications]
+      summary: Marquer une notification comme lue
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/profile:
+    get:
+      tags: [Comptes et profil]
+      summary: Lire le profil et les réglages de l'utilisateur
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/contact:
+    patch:
+      tags: [Comptes et profil]
+      summary: Modifier les coordonnées
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/photo:
+    put:
+      tags: [Comptes et profil]
+      summary: Modifier la photo de profil
+      description: Accepte une image PNG, JPEG ou WebP encodée en data URL, de 200 Ko maximum.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photo: { type: string, description: URL data image ou null pour réinitialiser. }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/password:
+    put:
+      tags: [Comptes et profil]
+      summary: Changer le mot de passe
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/settings:
+    put:
+      tags: [Comptes et profil]
+      summary: Enregistrer les préférences utilisateur
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /accounts:
+    get:
+      tags: [Comptes et profil]
+      summary: Lister les comptes (chef)
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /accounts/{id}:
+    patch:
+      tags: [Comptes et profil]
+      summary: Activer ou désactiver un compte (chef)
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /accounts/{id}/reset-password:
+    post:
+      tags: [Comptes et profil]
+      summary: Réinitialiser le mot de passe d'un compte (chef)
+      description: >
+        Génère un mot de passe **temporaire aléatoire** (11 caractères), pose `mustChangePassword` et le renvoie **une seule fois**
+        (`temporaryPassword`). Il est aussi envoyé par e-mail si le service est configuré (`emailSent`). Jamais pour son propre compte.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Mot de passe temporaire.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  temporaryPassword: { type: string, example: "kP9xQ2mWnB7" }
+                  emailSent: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /stats/teaching-weekly:
+    get:
+      tags: [Statistiques]
+      summary: Statistiques hebdomadaires d'enseignement
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/class-averages:
+    get:
+      tags: [Statistiques]
+      summary: Moyennes par classe
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/grade-progress:
+    get:
+      tags: [Statistiques]
+      summary: Progression de saisie des notes
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/department-results:
+    get:
+      tags: [Statistiques]
+      summary: Résultats académiques du département
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/recent-absences:
+    get:
+      tags: [Statistiques]
+      summary: Absences récentes
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/hours-progress:
+    get:
+      tags: [Statistiques]
+      summary: Progression des heures d'enseignement
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/subject-rows:
+    get:
+      tags: [Statistiques]
+      summary: Données tabulaires par matière
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/teacher-rows:
+    get:
+      tags: [Statistiques]
+      summary: Données tabulaires par enseignant
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/hours-overview:
+    get:
+      tags: [Statistiques]
+      summary: Vue d'ensemble des heures
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /stats/teachers/{id}/recent-sessions:
+    get:
+      tags: [Statistiques]
+      summary: Séances récentes d'un enseignant
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonArray" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /stats/teachers/{id}/overview:
+    get:
+      tags: [Statistiques]
+      summary: Tableau de bord d'un enseignant
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /stats/students/{id}/overview:
+    get:
+      tags: [Statistiques]
+      summary: Tableau de bord d'un étudiant
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: SUIVI_SESSID
+      description: Cookie créé par POST /auth/login ; utiliser le cookie jar du client HTTP.
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      example: stu-018
+    FiliereIdQuery:
+      name: filiereId
+      in: query
+      schema: { type: string }
+    LevelIdQuery:
+      name: levelId
+      in: query
+      schema: { type: string }
+    SubjectIdQuery:
+      name: subjectId
+      in: query
+      schema: { type: string }
+  requestBodies:
+    JsonObject:
+      required: true
+      description: Corps JSON ; les champs propres à l'opération sont validés par le contrôleur.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/JsonObject" }
+  responses:
+    JsonObject:
+      description: Objet JSON de résultat.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/JsonObject" }
+    JsonArray:
+      description: Tableau JSON de résultats.
+      content:
+        application/json:
+          schema:
+            type: array
+            items: {}
+    Unauthorized:
+      description: Session absente, invalide ou expirée.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Rôle ou périmètre d'accès insuffisant.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Route ou ressource introuvable.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Données invalides ou opération refusée par les règles métier.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    JsonObject:
+      type: object
+      additionalProperties: true
+    User:
+      type: object
+      required: [id, email, role, active]
+      properties:
+        id: { type: string, example: usr-chef }
+        email: { type: string, format: email }
+        role: { type: string, enum: [chef, enseignant, etudiant] }
+        profileId: { type: string, nullable: true }
+        firstName: { type: string }
+        lastName: { type: string }
+        photo: { type: string }
+        active: { type: boolean }
+        mustChangePassword: { type: boolean }
+        settings: { type: object, nullable: true, additionalProperties: true }
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        fields:
+          type: object
+          additionalProperties: { type: string }
+security:
+  - SessionCookie: []

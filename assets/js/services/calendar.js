@@ -20,6 +20,9 @@ import { list, replaceAll } from './data.js';
 import { ValidationError } from './errors.js';
 import { resolveSettings } from './accounts.js';
 import { idSequence, nextId } from './ids.js';
+import { request, requestOrNull } from './api.js';
+
+const enc = encodeURIComponent;
 
 const text = (value) => String(value ?? '').trim();
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -111,6 +114,7 @@ async function notifyAudience(event, kind, actor) {
 export const EventService = {
     /** filters : { types, role, from, to } ; garde les événements qui chevauchent [from, to] (dates ISO) */
     async list({ types, role, from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/events', { query: { types, from, to } }); // le rôle vient de la session, jamais du client
         let items = await list('events');
         if (types) items = items.filter((e) => types.includes(e.type));
         if (role) items = items.filter((e) => e.audience.includes(role));
@@ -121,6 +125,7 @@ export const EventService = {
 
     /** Un événement par id (null s'il n'existe pas ou si `role` n'est pas dans son audience). */
     async get(id, role = null) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/events/${enc(id)}`);
         const event = (await list('events')).find((e) => e.id === id) ?? null;
         return event && (!role || event.audience.includes(role)) ? event : null;
     },
@@ -132,15 +137,17 @@ export const EventService = {
 
     /** Une session de rattrapage est-elle encore à venir ? (détermine le résultat « Rattrapage ») */
     async rattrapageOpen() {
+        if (!config.USE_MOCK) return (await request('GET', '/events/rattrapage-open')).open;
         return (await list('events')).some((e) => e.type === 'rattrapage' && e.start > todayISO());
     },
 
     /** Crée un événement (chef). options.notify : prévenir les destinataires. Retourne { event, notified }. */
     async create(input, actor, { notify = false } = {}) {
+        if (!config.USE_MOCK) return request('POST', '/events', { body: { ...input, notify } });
         requireChef(actor, 'créer');
         const fields = validateEvent(input);
         const events = await list('events');
-        const event = { id: nextId('evt', events), ...fields, createdBy: actor.id, createdAt: nowISO() };
+        const event = { id: nextId('evt', events), ...fields, createdBy: actor.id, createdAt: todayISO() };
         await replaceAll('events', [...events, event]);
         const notified = notify ? await notifyAudience(event, 'created', actor) : 0;
         return { event, notified };
@@ -148,6 +155,7 @@ export const EventService = {
 
     /** Modifie un événement (chef). Retourne { event, notified }. */
     async update(id, input, actor, { notify = false } = {}) {
+        if (!config.USE_MOCK) return request('PUT', `/events/${enc(id)}`, { body: { ...input, notify } });
         requireChef(actor, 'modifier');
         const events = await list('events');
         const index = events.findIndex((e) => e.id === id);
@@ -161,6 +169,7 @@ export const EventService = {
 
     /** Supprime un événement (chef) et ses notifications. */
     async remove(id, actor) {
+        if (!config.USE_MOCK) { await request('DELETE', `/events/${enc(id)}`); return; }
         requireChef(actor, 'supprimer');
         const [events, notifications] = await Promise.all([list('events'), list('notifications')]);
         if (!events.some((e) => e.id === id)) throw new ValidationError('Événement introuvable.');
@@ -170,6 +179,7 @@ export const EventService = {
 
     /** Nombre de notifications liées à un événement (annoncé avant suppression). */
     async notificationCount(id) {
+        if (!config.USE_MOCK) return (await request('GET', `/events/${enc(id)}/notification-count`)).count;
         return (await list('notifications')).filter((n) => n.eventId === id).length;
     },
 };
@@ -177,6 +187,7 @@ export const EventService = {
 export const NotificationService = {
     /** Notifications d'un utilisateur, de la plus récente à la plus ancienne, avec l'événement associé. */
     async listForUser(userId, limit = 5) {
+        if (!config.USE_MOCK) return request('GET', '/notifications', { query: { limit } });
         const [notifications, events] = await Promise.all([list('notifications'), list('events')]);
         return notifications
             .filter((n) => n.userId === userId)
@@ -186,10 +197,12 @@ export const NotificationService = {
     },
 
     async unreadCount(userId) {
+        if (!config.USE_MOCK) return (await request('GET', '/notifications/unread-count')).count;
         return (await list('notifications')).filter((n) => n.userId === userId && !n.read).length;
     },
 
     async markRead(id, userId) {
+        if (!config.USE_MOCK) { await request('POST', `/notifications/${enc(id)}/read`, { body: {} }); return; }
         const all = await list('notifications');
         const target = all.find((n) => n.id === id && n.userId === userId);
         if (!target || target.read) return;
@@ -203,6 +216,7 @@ export const NotificationService = {
      * comptent comme le rappel le plus lointain. Mock uniquement : avec le backend, c'est une tâche planifiée.
      */
     async syncReminders(user) {
+        if (!config.USE_MOCK) return 0; // avec le backend : tâche planifiée côté serveur (cron/reminders.php)
         const days = [...resolveSettings(user).reminders].sort((a, b) => a - b); // échéances choisies par l'utilisateur, du plus proche au plus lointain
         if (!days.length) return 0;
         const today = todayISO();
@@ -229,6 +243,7 @@ export const NotificationService = {
     },
 
     async markAllRead(userId) {
+        if (!config.USE_MOCK) { await request('POST', '/notifications/read-all', { body: {} }); return; }
         const all = await list('notifications');
         all.forEach((n) => { if (n.userId === userId) n.read = true; });
         await replaceAll('notifications', all);

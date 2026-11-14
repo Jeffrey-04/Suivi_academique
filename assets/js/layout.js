@@ -153,8 +153,8 @@ export function renderNavbar({ role, user, notifications, unread, page }) {
 }
 
 export function renderFooter() {
-    const demo = config.USE_MOCK
-        ? '<li><span class="footer-link">Mode démo : données simulées <span class="status-dot"></span></span></li>'
+    const demo = config.DEMO
+        ? `<li><span class="footer-link">Mode démo : ${config.USE_MOCK ? 'données simulées' : 'données fictives'} <span class="status-dot"></span></span></li>`
         : '';
     return `
     <footer class="footer-custom">

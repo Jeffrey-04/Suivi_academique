@@ -17,7 +17,7 @@ const ctx = await initPage({ role: 'enseignant', page: 'checkin' });
 
 if (ctx) {
     const actor = { id: ctx.user.id, role: ctx.user.role, profileId: ctx.user.profileId };
-    const campus = PresenceService.institution();
+    const campus = await PresenceService.institution();
 
     $('campus').innerHTML = `
       <div class="d-flex align-items-start gap-3">
@@ -47,7 +47,7 @@ if (ctx) {
         if (!subjects.length) {
             $('checkin-host').innerHTML = emptyState("Aucune matière ne vous est attribuée : vous ne pouvez pas marquer votre présence.", 'bi-book');
         } else {
-            const simulation = config.USE_MOCK ? `
+            const simulation = config.DEMO ? `
               <div class="col-12">
                 <div class="demo-note"><i class="bi bi-tools" aria-hidden="true"></i> <strong>Démonstration</strong> : cet appareil n'est pas sur le campus, choisissez la position à simuler.</div>
               </div>

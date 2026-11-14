@@ -17,6 +17,9 @@ import { todayISO } from '../utils/format.js';
 import { list, replaceAll } from './data.js';
 import { ValidationError } from './errors.js';
 import { idSequence } from './ids.js';
+import { request, requestOrNull } from './api.js';
+
+const enc = encodeURIComponent;
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -27,10 +30,12 @@ function clock() {
 
 export const PresenceService = {
     /** Position et rayon de l'établissement. */
-    institution: () => ({ ...INSTITUTION.location }),
+    // Position du campus : fournie par le serveur au démarrage (GET /config) en mode API, par config.js en mode simulé
+    institution: async () => ({ ...INSTITUTION.location }),
 
     /** Présences marquées, de la plus récente à la plus ancienne, avec la matière. Filtres : teacherId, from, to. */
     async list({ teacherId, from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/checkins', { query: { teacherId, from, to } });
         const [checkins, subjects] = await Promise.all([list('checkins'), list('subjects')]);
         return checkins
             .filter((c) => (!teacherId || c.teacherId === teacherId) && (!from || c.date >= from) && (!to || c.date <= to))
@@ -43,6 +48,7 @@ export const PresenceService = {
      * Retourne { id, teacherId, subjectId, date, time, distance, accuracy } ; refuse avec un message précis sinon.
      */
     async checkIn({ subjectId, lat, lng, accuracy }, actor) {
+        if (!config.USE_MOCK) return request('POST', '/checkins', { body: { subjectId, lat, lng, accuracy } });
         if (actor?.role !== 'enseignant') throw new ValidationError('Seul l\'enseignant peut marquer sa présence.');
         const [subjects, checkins] = await Promise.all([list('subjects'), list('checkins')]);
         const subject = subjects.find((s) => s.id === subjectId);

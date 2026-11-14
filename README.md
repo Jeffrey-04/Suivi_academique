@@ -37,15 +37,19 @@ Transversal : exports **Excel (.xlsx) mis en forme**, CSV et agenda **.ics** · 
 
 ## Lancer le projet
 
-Aucune installation : pas de `npm`, pas de build. Il suffit de servir le dossier (les modules ES et les données de démonstration ne fonctionnent pas en `file://`) :
+L'application est un **frontend statique** (HTML, CSS, JavaScript natif) servi avec son **backend PHP** (`backend/`, API REST + MySQL/MariaDB) dans un seul arbre. Prérequis : PHP 8.1+ avec `pdo_mysql` et `mbstring`, et une base MySQL/MariaDB vide.
 
 ```bash
 git clone https://github.com/Jeffrey-04/Suivi_academique.git
 cd Suivi_academique
-php -S localhost:8000        # ou : python3 -m http.server 8000
+# 1. créer une base « suivi_academique » (utilisateur root sans mot de passe par défaut ; sinon variables DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS)
+php backend/install.php --mode=demo        # schéma + jeu de démonstration
+php -S localhost:8000 -t . tools/dev-router.php
 ```
 
-Puis ouvrir <http://localhost:8000/>.
+Puis ouvrir <http://localhost:8000/>. Les modes d'installation (démonstration ou production), la configuration, le cron des rappels, l'envoi d'e-mails et la sécurité sont décrits dans [backend/README.md](backend/README.md) ; le déploiement pas à pas sur un hébergement gratuit (InfinityFree) dans [GUIDE_INFINITYFREE.md](GUIDE_INFINITYFREE.md).
+
+**Sans serveur** : le mode démonstration autonome (données simulées dans le navigateur) s'ouvre avec `?mock=1` (`?mock=0` pour revenir au backend), par exemple avec `python3 -m http.server 8000` puis <http://localhost:8000/?mock=1>.
 
 ## Comptes de démonstration
 
@@ -57,11 +61,12 @@ Mot de passe commun : **`demo1234`** (les comptes sont aussi proposés en un cli
 | Enseignant | `herve.kamga@dept-info.demo` |
 | Étudiant | `ulrich.foning@etu.dept-info.demo` |
 
-Les données sont **fictives** et réalistes (3 filières, 54 étudiants, 14 enseignants, 45 matières, 870 séances…). La date du jour est **simulée** au 25/01/2027 pour que le jeu de données reste cohérent. Les modifications faites dans l'application sont conservées dans le navigateur ; le menu du profil propose « Réinitialiser la démo ».
+Les données sont **fictives** et réalistes (3 filières, 54 étudiants, 14 enseignants, 45 matières, 870 séances…). En mode démonstration, la date du jour est **simulée** au 25/01/2027 pour que le jeu de données reste cohérent. En **production**, la base est vierge avec un seul compte chef de département et les vrais mots de passe sont temporaires et aléatoires.
 
 ## Technologies
 
 - **HTML statique + JavaScript natif** (modules ES, sans framework ni bundler)
+- **PHP 8 pur** (sans Composer) et **MySQL / MariaDB** pour l'API REST (`backend/`)
 - **Bootstrap 5** et Bootstrap Icons
 - **ApexCharts** (graphiques), **Flatpickr** (sélecteur de période)
 - **ExcelJS** (export Excel) et **jsPDF** (bulletins PDF), chargés à la demande
@@ -83,21 +88,24 @@ School/
 │       ├── services/                   # couche de données : mock ⇄ backend, règles de gestion
 │       ├── utils/ · components/        # calculs, composants et utilitaires partagés
 │       └── pages/                      # un module par page
-└── tools/generate-mock.mjs             # génère les données de démonstration
+├── backend/                            # API REST PHP + MySQL (voir backend/README.md)
+└── tools/                              # générateur de données, routeur de développement, tests automatiques
 ```
 
 Les pages ne lisent jamais les données directement : elles passent par `assets/js/services/`. C'est ce qui permettra de brancher un vrai backend sans toucher aux écrans.
 
 ## État du projet et backend
 
-- **Frontend complet** pour les trois rôles, alimenté par des **données simulées** (aucun appel réseau réel, aucun code serveur).
-- Le **backend PHP** sera branché ensuite : les écrans passent uniquement par la couche de services (`assets/js/services/`), c'est elle qu'il suffira d'adapter ; aucune page n'est à modifier.
-- ⚠️ **Démonstration uniquement** : l'authentification est simulée et les mots de passe de démonstration sont en clair. La vraie sécurité (authentification, droits, contrôles) doit être assurée par le serveur ; l'établissement et le doyen figurant sur les relevés sont **fictifs**.
+- **Application complète** pour les trois rôles : frontend statique + **API PHP / MySQL** (`backend/`), intégrés et vérifiés ensemble.
+- Les écrans passent uniquement par la couche de services (`assets/js/services/`) : en mode normal ils appellent l'API, en mode démonstration autonome (`?mock=1`) ils utilisent des données simulées dans le navigateur.
+- Plus de 250 contrôles automatiques (lectures, droits, écritures, sécurité, parcours dans le navigateur) : voir [tools/tests/README.md](tools/tests/README.md).
+- 🔒 **Sécurité** : l'authentification et les droits sont assurés par le serveur (session, mots de passe hachés, requêtes préparées, limitation des tentatives de connexion). Les comptes de démonstration (`demo1234`) ne doivent **jamais** servir en production ; l'établissement et le doyen figurant sur les relevés sont **fictifs** tant qu'ils ne sont pas configurés.
 
-Régénérer les données de démonstration après modification du générateur :
+Régénérer les données de démonstration après modification du générateur (puis réinstaller la démonstration) :
 
 ```bash
 node tools/generate-mock.mjs
+php backend/database/seed.php
 ```
 
 ## Contribuer
@@ -106,8 +114,8 @@ Les contributions sont les bienvenues : signaler un problème, proposer une amé
 
 1. Parcourir la [structure du projet](#structure-du-projet) : un écran = une page HTML + un module dans `assets/js/pages/` ; la logique métier vit dans `assets/js/services/` et `assets/js/utils/calculs.js`.
 2. Respecter les principes : **interface en français, code en anglais**, aucun style en ligne, pas de variable globale, composants existants réutilisés, **pages sans accès direct aux données** (passer par les services).
-3. Ne pas modifier `assets/mock/*.json` à la main : modifier `tools/generate-mock.mjs` puis le relancer.
-4. Vérifier dans le navigateur : console sans erreur, rendu ordinateur **et** téléphone, les trois rôles.
+3. Ne pas modifier `assets/mock/*.json` à la main : modifier `tools/generate-mock.mjs` puis le relancer (ces fichiers alimentent aussi le jeu de démonstration du backend).
+4. Vérifier : `node tools/tests/run-all.mjs` (voir [tools/tests/README.md](tools/tests/README.md)) et dans le navigateur la console sans erreur, le rendu ordinateur **et** téléphone, les trois rôles.
 
 Ouvrez une *issue* pour discuter d'un changement important avant de le développer.
 

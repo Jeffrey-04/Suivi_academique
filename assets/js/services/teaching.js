@@ -18,6 +18,9 @@ import { list, replaceAll } from './data.js';
 import { ValidationError } from './errors.js';
 import { idSequence } from './ids.js';
 import { ReferenceService } from './people.js';
+import { request, requestOrNull } from './api.js';
+
+const enc = encodeURIComponent;
 
 const period = () => `${config.CURRENT_SEMESTER}-${config.ACADEMIC_YEAR}`;
 const text = (value) => String(value ?? '').trim();
@@ -93,6 +96,7 @@ async function loadContext() {
 export const SessionService = {
     /** filters : { teacherId, subjectId, status, from, to } (dates ISO, bornes incluses) */
     async list({ teacherId, subjectId, status, from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/sessions', { query: { teacherId, subjectId, status, from, to } });
         let items = await list('sessions');
         if (teacherId) items = items.filter((s) => s.teacherId === teacherId);
         if (subjectId) items = items.filter((s) => s.subjectId === subjectId);
@@ -103,11 +107,13 @@ export const SessionService = {
     },
 
     async get(id) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/sessions/${enc(id)}`);
         return (await list('sessions')).find((s) => s.id === id) ?? null;
     },
 
     /** Séances enrichies (durée, enseignant, matière, classe), de la plus récente à la plus ancienne. */
     async detailed(filters = {}) {
+        if (!config.USE_MOCK) return request('GET', '/sessions/detailed', { query: filters });
         const [sessions, teachers, subjects, classes, checkins] = await Promise.all([this.list(filters), list('teachers'), list('subjects'), ReferenceService.classes(), list('checkins')]);
         const marked = new Set(checkins.map((c) => `${c.teacherId}|${c.subjectId}|${c.date}`)); // présences géolocalisées
         const teacherById = new Map(teachers.map((t) => [t.id, t]));
@@ -123,6 +129,7 @@ export const SessionService = {
 
     /** Compteurs { total, present, absent, rate, hours (réalisées), scheduledHours } sur la période demandée. */
     async stats(filters = {}) {
+        if (!config.USE_MOCK) return request('GET', '/sessions/stats', { query: filters });
         const sessions = await this.list(filters);
         const present = sessions.filter((s) => s.status === 'present');
         const hours = (items) => round2(items.reduce((total, s) => total + sessionHours(s), 0));
@@ -134,6 +141,7 @@ export const SessionService = {
 
     /** L'enseignant déclare une séance qu'il a effectuée. */
     async declare(input, actor) {
+        if (!config.USE_MOCK) return request('POST', '/sessions', { body: input });
         if (actor?.role !== 'enseignant') throw new ValidationError("Seul l'enseignant peut déclarer ses séances.");
         const ctx = await loadContext();
         const { errors, subject, date, start, end } = validateSession(input, ctx, { forcedTeacherId: actor.profileId });
@@ -149,6 +157,7 @@ export const SessionService = {
 
     /** Le chef enregistre l'absence d'un enseignant à une séance. */
     async recordAbsence(input, actor) {
+        if (!config.USE_MOCK) return request('POST', '/sessions/absences', { body: input });
         if (actor?.role !== 'chef') throw new ValidationError("Seul le chef de département peut enregistrer une absence.");
         const ctx = await loadContext();
         const { errors, subject, date, start, end } = validateSession(input, ctx);
@@ -164,6 +173,7 @@ export const SessionService = {
 
     /** Corrige une séance : le chef peut tout modifier (y compris le statut) ; l'enseignant ses propres déclarations récentes. */
     async update(id, input, actor) {
+        if (!config.USE_MOCK) return request('PUT', `/sessions/${enc(id)}`, { body: input });
         const ctx = await loadContext();
         const session = ctx.sessions.find((s) => s.id === id);
         if (!session) throw new ValidationError('Séance introuvable.');
@@ -185,6 +195,7 @@ export const SessionService = {
     },
 
     async remove(id, actor) {
+        if (!config.USE_MOCK) { await request('DELETE', `/sessions/${enc(id)}`); return; }
         const sessions = await list('sessions');
         const session = sessions.find((s) => s.id === id);
         if (!session) throw new ValidationError('Séance introuvable.');
@@ -195,12 +206,14 @@ export const SessionService = {
 
 export const HoursService = {
     async summary(teacherId) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/teachers/${enc(teacherId)}/hours`);
         const [teachers, subjects, sessions] = await Promise.all([list('teachers'), list('subjects'), list('sessions')]);
         const teacher = teachers.find((t) => t.id === teacherId);
         return teacher ? hoursSummary({ teacher, subjects, sessions, period: period() }) : null;
     },
 
     async summaries() {
+        if (!config.USE_MOCK) return request('GET', '/hours');
         const [teachers, subjects, sessions] = await Promise.all([list('teachers'), list('subjects'), list('sessions')]);
         return teachers.map((teacher) => hoursSummary({ teacher, subjects, sessions, period: period() }));
     },

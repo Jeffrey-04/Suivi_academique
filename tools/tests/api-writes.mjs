@@ -1,0 +1,98 @@
+// Écritures refusées : compare les messages / champs d'erreur de l'API à ceux des services du frontend (mode simulé)
+import { readFileSync } from 'node:fs';
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
+
+import { fileURLToPath } from 'node:url';
+globalThis.SCHOOL_MODE = 'mock'; // services du frontend en mode simulé : c'est la RÉFÉRENCE comparée à l'API
+import { call, login, ACCOUNTS } from './api-lib.mjs';
+const P = ROOT;
+const mem = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => { m.set(k, String(v)); }, removeItem: k => { m.delete(k); }, get length() { return m.size; }, key: i => [...m.keys()][i] }; };
+globalThis.localStorage = mem(); globalThis.sessionStorage = mem();
+globalThis.fetch = ((orig) => async (u, o) => (String(u).startsWith('file:') ? (() => { const body = readFileSync(fileURLToPath(u), 'utf8'); return { ok: true, status: 200, json: async () => JSON.parse(body) }; })() : orig(u, o)))(globalThis.fetch);
+const M = await import(P + 'assets/js/services/index.js');
+for (const r of Object.keys(ACCOUNTS)) await login(r);
+const A = Object.fromEntries(Object.entries(ACCOUNTS).map(([k, v]) => [k, v.actor]));
+const only = process.argv[2]; let pass = 0, fail = 0; const out = [];
+async function mockError(fn) { try { await fn(); return { ok: true }; } catch (e) { return { ok: false, message: e.message, fields: e.fields ?? {} }; } }
+async function cmp(name, role, method, path, body, mockFn, { allowStatus = [422, 409], noMessage = false } = {}) {
+  if (only && !name.includes(only)) return;
+  const m = await mockError(mockFn); const r = await call(role, method, path, body);
+  const apiOk = r.status >= 200 && r.status < 300;
+  const problems = [];
+  if (m.ok !== apiOk) problems.push(`résultat différent : simulé=${m.ok ? 'succès' : 'refus'} / API=${r.status}`);
+  else if (!m.ok) {
+    if (!allowStatus.includes(r.status)) problems.push(`statut ${r.status} (attendu ${allowStatus.join('/')})`);
+    if (!noMessage && (r.json?.message ?? '') !== m.message) problems.push(`message : « ${r.json?.message ?? r.text.slice(0, 80)} » ≠ « ${m.message} »`);
+    const af = r.json?.fields ?? {}; const keys = new Set([...Object.keys(m.fields), ...Object.keys(af)]);
+    for (const k of keys) if (m.fields[k] !== af[k]) problems.push(`champ ${k} : « ${af[k] ?? '∅'} » ≠ « ${m.fields[k] ?? '∅'} »`);
+  }
+  problems.length ? (fail++, out.push(`✗ ${name}\n      ${problems.join('\n      ')}`)) : pass++;
+}
+const stu = { firstName: 'A', lastName: '', email: 'pas-mail', phone: 'abc', birthDate: '2015-01-01', levelId: 'x', birthPlace: 'x'.repeat(61) };
+await cmp('student create invalide', 'chef', 'POST', '/students', stu, () => M.StudentService.create(stu));
+const dup = { firstName: 'Anne', lastName: 'Test', email: 'ulrich.foning@etu.dept-info.demo', birthDate: '2005-01-01', levelId: 'lvl-gl-m1' };
+await cmp('student create e-mail déjà pris', 'chef', 'POST', '/students', dup, () => M.StudentService.create(dup));
+const old = { firstName: 'Anne', lastName: 'Test', email: 'a@b.cd', birthDate: '1930-01-01', levelId: 'lvl-gl-m1' };
+await cmp('student create date de naissance trop ancienne', 'chef', 'POST', '/students', old, () => M.StudentService.create(old));
+const chg = { firstName: 'Ulrich', lastName: 'Foning', email: 'ulrich.foning@etu.dept-info.demo', birthDate: '2002-01-01', levelId: 'lvl-gl-l2' };
+await cmp('student update changement de classe avec notes', 'chef', 'PUT', '/students/stu-018', chg, () => M.StudentService.update('stu-018', chg));
+await cmp('student update inconnu', 'chef', 'PUT', '/students/stu-999', chg, () => M.StudentService.update('stu-999', chg), { allowStatus: [404, 422] });
+const tch = { firstName: '', lastName: 'X', grade: 'Roi', email: 'x', phone: '1', contractHours: 900 };
+await cmp('teacher create invalide', 'chef', 'POST', '/teachers', tch, () => M.TeacherService.create(tch));
+await cmp('teacher delete avec matières', 'chef', 'DELETE', '/teachers/tea-005', undefined, () => M.TeacherService.remove('tea-005'), { allowStatus: [409, 422] });
+const sub = { code: 'x', name: 'ab', coefficient: 99, plannedHours: 0, levelId: 'x', semester: 'S9', teacherId: 'tea-xxx', unitId: 'ue-xxx' };
+await cmp('subject create invalide', 'chef', 'POST', '/subjects', sub, () => M.SubjectService.create(sub));
+const dupc = { code: 'DS403', name: 'Autre matière', coefficient: 2, plannedHours: 30, levelId: 'lvl-ds-m1', semester: 'S1', teacherId: 'tea-005' };
+await cmp('subject create code déjà utilisé', 'chef', 'POST', '/subjects', dupc, () => M.SubjectService.create(dupc));
+const s1 = (await M.SubjectService.get('sub-001'));
+const upS = { code: s1.code, name: s1.name, coefficient: s1.coefficient, plannedHours: s1.plannedHours, levelId: 'lvl-gl-l3', semester: s1.semester, teacherId: s1.teacherId, unitId: null };
+await cmp('subject update classe figée', 'chef', 'PUT', '/subjects/sub-001', upS, () => M.SubjectService.update('sub-001', upS));
+await cmp('subject delete avec notes', 'chef', 'DELETE', '/subjects/sub-001', undefined, () => M.SubjectService.remove('sub-001'), { allowStatus: [409, 422] });
+const ent = { entries: [{ studentId: 'stu-024', value: '25' }, { studentId: 'stu-025', value: 'abc' }, { studentId: 'stu-026', value: '12.345' }, { studentId: 'stu-018', value: '10' }] };
+const dsStudents = (await M.StudentService.list({ levelId: 'lvl-ds-m1' })).map((s) => s.id);
+const ent2 = { entries: [{ studentId: dsStudents[0], value: '25' }, { studentId: dsStudents[1], value: 'abc' }, { studentId: dsStudents[2], value: '12.345' }, { studentId: 'stu-018', value: '10' }] };
+await cmp('grades saveDrafts invalide', 'enseignant', 'PUT', '/subjects/sub-043/grades/EXAMEN', ent2, () => M.GradeService.saveDrafts({ subjectId: 'sub-043', type: 'EXAMEN', entries: ent2.entries }, A.enseignant));
+await cmp('grades saveDrafts note validée', 'enseignant', 'PUT', '/subjects/sub-043/grades/CC', { entries: [{ studentId: dsStudents[0], value: '12' }] }, () => M.GradeService.saveDrafts({ subjectId: 'sub-043', type: 'CC', entries: [{ studentId: dsStudents[0], value: '12' }] }, A.enseignant));
+await cmp('grades saveDrafts rattrapage non éligible', 'enseignant', 'PUT', '/subjects/sub-043/grades/RATTRAPAGE', { entries: [{ studentId: dsStudents[0], value: '12' }] }, () => M.GradeService.saveDrafts({ subjectId: 'sub-043', type: 'RATTRAPAGE', entries: [{ studentId: dsStudents[0], value: '12' }] }, A.enseignant));
+await cmp('grades saveDrafts par le chef', 'chef', 'PUT', '/subjects/sub-043/grades/CC', { entries: [] }, () => M.GradeService.saveDrafts({ subjectId: 'sub-043', type: 'CC', entries: [] }, A.chef));
+await cmp('grades validate sans brouillon', 'enseignant', 'POST', '/subjects/sub-043/grades/CC/validate', {}, () => M.GradeService.validate({ subjectId: 'sub-043', type: 'CC' }, A.enseignant));
+const ses = { subjectId: '', date: '2027-02-01', startTime: '10:00', endTime: '09:00', note: 'x'.repeat(201) };
+await cmp('session déclarer invalide', 'enseignant', 'POST', '/sessions', ses, () => M.SessionService.declare(ses, A.enseignant));
+const mine = (await M.SubjectService.list({ teacherId: 'tea-005' }))[0];
+const clash = { subjectId: mine.id, date: '2027-01-08', startTime: '16:15', endTime: '18:15', note: '' };
+await cmp('session déclarer chevauchement', 'enseignant', 'POST', '/sessions', clash, () => M.SessionService.declare(clash, A.enseignant));
+const fut = { subjectId: mine.id, date: '2027-03-01', startTime: '08:00', endTime: '10:00' };
+await cmp('session déclarer futur', 'enseignant', 'POST', '/sessions', fut, () => M.SessionService.declare(fut, A.enseignant));
+await cmp('session déclarer par le chef', 'chef', 'POST', '/sessions', fut, () => M.SessionService.declare(fut, A.chef), { allowStatus: [403, 422], noMessage: true });
+await cmp('session absence par enseignant', 'enseignant', 'POST', '/sessions/absences', fut, () => M.SessionService.recordAbsence(fut, A.enseignant), { allowStatus: [403, 422], noMessage: true });
+await cmp('session supprimer ancienne (enseignant)', 'enseignant', 'DELETE', '/sessions/ses-0795', undefined, () => M.SessionService.remove('ses-0795', A.enseignant), { allowStatus: [403, 422] });
+const far = { subjectId: mine.id, lat: 3.9, lng: 11.6, accuracy: 20 };
+await cmp('checkin hors rayon', 'enseignant', 'POST', '/checkins', far, () => M.PresenceService.checkIn(far, A.enseignant));
+const imp = { subjectId: mine.id, lat: 3.8667, lng: 11.5167, accuracy: 250 };
+await cmp('checkin imprécis', 'enseignant', 'POST', '/checkins', imp, () => M.PresenceService.checkIn(imp, A.enseignant));
+const bad = { subjectId: mine.id, lat: 'x', lng: 11.5, accuracy: 5 };
+await cmp('checkin position invalide', 'enseignant', 'POST', '/checkins', bad, () => M.PresenceService.checkIn(bad, A.enseignant));
+const evb = { type: 'x', title: 'ab', start: '2025-01-01', end: '', startTime: '25:00', endTime: '', location: 'y'.repeat(81), description: 'z'.repeat(501), audience: [] };
+await cmp('event create invalide', 'chef', 'POST', '/events', evb, () => M.EventService.create(evb, A.chef));
+const evm = { type: 'cc', title: 'Contrôle', start: '2027-03-01', end: '2027-03-05', startTime: '08:00', endTime: '10:00', audience: ['etudiant'] };
+await cmp('event create horaires multi-jours', 'chef', 'POST', '/events', evm, () => M.EventService.create(evm, A.chef));
+await cmp('event create par enseignant', 'enseignant', 'POST', '/events', evm, () => M.EventService.create(evm, A.enseignant));
+await cmp('event delete inconnu', 'chef', 'DELETE', '/events/evt-999', undefined, () => M.EventService.remove('evt-999', A.chef), { allowStatus: [404, 422] });
+const ct = { email: 'pas-un-mail', phone: 'abc' };
+await cmp('me/contact invalide', 'enseignant', 'PATCH', '/me/contact', ct, () => M.AccountService.updateContact('usr-tea-005', ct, A.enseignant));
+const ct2 = { email: 'nouveau@dept-info.demo', phone: '' };
+await cmp('me/contact e-mail sans mot de passe', 'enseignant', 'PATCH', '/me/contact', ct2, () => M.AccountService.updateContact('usr-tea-005', ct2, A.enseignant));
+const pw = { currentPassword: 'faux', newPassword: 'court', confirmPassword: 'autre' };
+await cmp('me/password invalide', 'enseignant', 'PUT', '/me/password', pw, () => M.AccountService.changePassword('usr-tea-005', pw, A.enseignant));
+const pw2 = { currentPassword: 'demo1234', newPassword: 'abcdefgh', confirmPassword: 'abcdefgh' };
+await cmp('me/password sans chiffre', 'enseignant', 'PUT', '/me/password', pw2, () => M.AccountService.changePassword('usr-tea-005', pw2, A.enseignant));
+const st = { reminders: ['3'], calendarView: 'xx' };
+await cmp('me/settings invalide', 'enseignant', 'PUT', '/me/settings', st, () => M.AccountService.updateSettings('usr-tea-005', st, A.enseignant));
+await cmp('me/photo invalide', 'enseignant', 'PUT', '/me/photo', { photo: 'http://x/y.png' }, () => M.AccountService.updatePhoto('usr-tea-005', 'http://x/y.png', A.enseignant));
+await cmp('accounts désactiver son compte', 'chef', 'PATCH', '/accounts/usr-chef', { active: false }, () => M.AccountService.setActive('usr-chef', false, A.chef));
+await cmp('accounts réinitialiser son compte', 'chef', 'POST', '/accounts/usr-chef/reset-password', {}, () => M.AccountService.resetPassword('usr-chef', A.chef));
+await cmp('accounts par enseignant', 'enseignant', 'PATCH', '/accounts/usr-stu-018', { active: false }, () => M.AccountService.setActive('usr-stu-018', false, A.enseignant), { allowStatus: [403, 422], noMessage: true });
+await cmp('bulletins generate par enseignant', 'enseignant', 'POST', '/bulletins/generate', { studentIds: ['stu-001'] }, () => M.BulletinService.generate({ studentIds: ['stu-001'] }, A.enseignant), { allowStatus: [403, 422], noMessage: true });
+await cmp('bulletins generate relevé incomplet', 'chef', 'POST', '/bulletins/generate', { studentIds: ['stu-001'] }, () => M.BulletinService.generate({ studentIds: ['stu-001'] }, A.chef));
+console.log(`=== ÉCRITURES REFUSÉES : ${pass} conformes, ${fail} en écart ===\n${out.join('\n')}`);
+if (fail) process.exitCode = 1;

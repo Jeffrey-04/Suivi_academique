@@ -6,9 +6,10 @@
 import { TEACHER_GRADES, TeacherService } from '../services/index.js';
 import { confirmDialog, infoDialog, openFormModal, toast } from '../utils/dialogs.js';
 import { inputField, selectField } from './fields.js';
+import { showTemporaryPassword } from './temp-password.js';
 
 /** @returns {Promise<object|null>} l'enseignant enregistré, ou null si annulé */
-export function openTeacherForm(teacher = null) {
+export async function openTeacherForm(teacher = null) {
     const body = `
       <div class="row g-3">
         ${inputField({ label: 'Prénom', name: 'firstName', value: teacher?.firstName, required: true })}
@@ -20,7 +21,7 @@ export function openTeacherForm(teacher = null) {
       </div>
       <p class="stat-hint mt-3 mb-0">Le volume horaire dû sert de référence au calcul des heures supplémentaires. Un compte de connexion est créé avec l'adresse e-mail saisie.</p>`;
 
-    return openFormModal({
+    const saved = await openFormModal({
         title: teacher ? "Modifier l'enseignant" : 'Ajouter un enseignant',
         submitLabel: teacher ? 'Enregistrer' : 'Ajouter',
         size: 'modal-lg',
@@ -31,6 +32,10 @@ export function openTeacherForm(teacher = null) {
             return saved;
         },
     });
+    if (saved?.temporaryPassword) {
+        await showTemporaryPassword({ name: `${saved.firstName} ${saved.lastName}`, email: saved.email, password: saved.temporaryPassword, emailSent: saved.emailSent });
+    }
+    return saved;
 }
 
 /** Supprime l'enseignant après confirmation, ou explique pourquoi c'est impossible. Retourne true si supprimé. */

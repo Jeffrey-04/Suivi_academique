@@ -2,6 +2,7 @@
 CLAUDE.md
 contrat-api.md
 projet.md
+analyse-backend.md
 
 # Système et éditeurs
 .DS_Store
@@ -9,3 +10,10 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# Backend : secrets et données d'exécution (jamais publiés)
+backend/config/config.local.php
+backend/storage/*
+!backend/storage/.htaccess
+analyse-backend.md
+GUIDE_INFINITYFREE.md

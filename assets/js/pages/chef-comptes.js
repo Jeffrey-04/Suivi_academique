@@ -8,7 +8,8 @@ import { ROLES } from '../config.js';
 import { initPage } from '../layout.js';
 import { mountExportMenu } from '../components/export-menu.js';
 import { AccountService } from '../services/index.js';
-import { confirmDialog, openModal, toast } from '../utils/dialogs.js';
+import { confirmDialog, toast } from '../utils/dialogs.js';
+import { showTemporaryPassword } from '../components/temp-password.js';
 import { describeFilters, exportInfo } from '../utils/exporter.js';
 import { esc, formatNumber, fullName, normalize } from '../utils/format.js';
 import { bindSort, paginate, paginationFooter, sortRows, sortableTh } from '../utils/table.js';
@@ -114,28 +115,14 @@ if (ctx) {
         const confirmed = await confirmDialog({
             title: 'Réinitialiser le mot de passe ?',
             message: `${fullName(account)} (${account.email}).`,
-            details: ['Son mot de passe actuel cessera de fonctionner.', 'Un mot de passe temporaire sera affiché une seule fois : vous devrez le lui communiquer.', 'Elle ou il devra en choisir un nouveau à sa prochaine connexion.'],
+            details: ['Son mot de passe actuel cessera de fonctionner.', 'Un mot de passe temporaire sera affiché une seule fois (et envoyé par e-mail si le service est configuré).', 'Elle ou il devra en choisir un nouveau à sa prochaine connexion.'],
             confirmLabel: 'Réinitialiser', danger: true,
         });
         if (!confirmed) return;
         try {
-            const { temporaryPassword } = await AccountService.resetPassword(account.id, actor);
+            const { temporaryPassword, emailSent } = await AccountService.resetPassword(account.id, actor);
             await refresh(account.id);
-            const choice = await openModal({
-                title: 'Mot de passe temporaire',
-                body: `<p class="mb-0">Pour <strong>${esc(fullName(account))}</strong> :</p>
-                       <code class="temp-password" aria-label="Mot de passe temporaire">${esc(temporaryPassword)}</code>
-                       <p class="stat-hint mb-0">Communiquez-le de façon sûre. Il ne sera plus affiché une fois cette fenêtre fermée.</p>`,
-                buttons: [{ id: 'copy', label: 'Copier', className: 'btn-custom-primary' }],
-            });
-            if (choice === 'copy') {
-                try {
-                    await navigator.clipboard.writeText(temporaryPassword);
-                    toast('Mot de passe copié.');
-                } catch {
-                    toast('Copie impossible : notez le mot de passe avant de fermer.', { type: 'danger' });
-                }
-            }
+            await showTemporaryPassword({ name: fullName(account), email: account.email, password: temporaryPassword, emailSent: Boolean(emailSent), reset: true });
         } catch (error) {
             toast(error.message, { type: 'danger' });
         }

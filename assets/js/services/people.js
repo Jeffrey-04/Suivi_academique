@@ -11,6 +11,9 @@ import { addDays, todayISO } from '../utils/format.js';
 import { list, replaceAll } from './data.js';
 import { ValidationError } from './errors.js';
 import { nextId } from './ids.js';
+import { request, requestOrNull } from './api.js';
+
+const enc = encodeURIComponent;
 
 const DEFAULT_PASSWORD = 'demo1234'; // mock uniquement : le backend générera / enverra un mot de passe temporaire
 const DEFAULT_PHOTO = 'assets/images/avatar.png';
@@ -45,10 +48,11 @@ function syncUser(users, profile) {
 }
 
 export const ReferenceService = {
-    filieres: () => list('filieres'),
-    levels: () => list('levels'),
+    filieres: () => (config.USE_MOCK ? list('filieres') : request('GET', '/filieres')),
+    levels: () => (config.USE_MOCK ? list('levels') : request('GET', '/levels')),
     /** Unités d'enseignement (UE) ; filtrables par classe et semestre. */
     async units({ levelId, semester } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/units', { query: { levelId, semester } });
         let items = await list('units');
         if (levelId) items = items.filter((u) => u.levelId === levelId);
         if (semester) items = items.filter((u) => u.semester === semester);
@@ -57,6 +61,7 @@ export const ReferenceService = {
 
     /** Classes (niveau + filière) : { id, name, filiereId, filiere, label: "L3 · Génie Logiciel", short: "L3 GL" }. */
     async classes() {
+        if (!config.USE_MOCK) return request('GET', '/classes');
         const [levels, filieres] = await Promise.all([list('levels'), list('filieres')]);
         return levels.map((level) => {
             const filiere = filieres.find((f) => f.id === level.filiereId);
@@ -73,6 +78,7 @@ export const ReferenceService = {
 export const StudentService = {
     /** filters : { filiereId, levelId, q } (q = recherche sur nom, prénom, matricule, e-mail). */
     async list({ filiereId, levelId, q } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/students', { query: { filiereId, levelId, q } });
         let items = await list('students');
         if (filiereId) items = items.filter((s) => s.filiereId === filiereId);
         if (levelId) items = items.filter((s) => s.levelId === levelId);
@@ -83,9 +89,11 @@ export const StudentService = {
         return items;
     },
     async get(id) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/students/${enc(id)}`);
         return (await list('students')).find((s) => s.id === id) ?? null;
     },
     async count() {
+        if (!config.USE_MOCK) return (await request('GET', '/students/count')).count;
         return (await list('students')).length;
     },
 
@@ -93,6 +101,7 @@ export const StudentService = {
     latestBirthDate: () => addDays(todayISO(), -15 * 365),
 
     async create(input) {
+        if (!config.USE_MOCK) return request('POST', '/students', { body: input });
         const [students, users, levels, filieres] = await Promise.all([list('students'), list('users'), list('levels'), list('filieres')]);
         const errors = validateIdentity(input, users, null);
         const level = levels.find((l) => l.id === input.levelId);
@@ -121,10 +130,11 @@ export const StudentService = {
         });
         students.push(student);
         await Promise.all([replaceAll('students', students), replaceAll('users', users)]);
-        return student;
+        return { ...student, temporaryPassword: DEFAULT_PASSWORD, emailSent: false }; // comme l'API : mot de passe à communiquer
     },
 
     async update(id, input) {
+        if (!config.USE_MOCK) return request('PUT', `/students/${enc(id)}`, { body: input });
         const [students, users, levels, grades] = await Promise.all([list('students'), list('users'), list('levels'), list('grades')]);
         const student = students.find((s) => s.id === id);
         if (!student) throw new ValidationError('Étudiant introuvable.');
@@ -148,12 +158,14 @@ export const StudentService = {
 
     /** Ce que supprimer un étudiant entraîne (affiché dans la confirmation). */
     async removalImpact(id) {
+        if (!config.USE_MOCK) return request('GET', `/students/${enc(id)}/removal-impact`);
         const [grades, bulletins] = await Promise.all([list('grades'), list('bulletins')]);
         return { grades: grades.filter((g) => g.studentId === id).length, bulletins: bulletins.filter((b) => b.studentId === id).length };
     },
 
     /** Supprime l'étudiant, son compte, ses notes, ses bulletins et ses notifications. */
     async remove(id) {
+        if (!config.USE_MOCK) { await request('DELETE', `/students/${enc(id)}`); return; }
         const [students, users, grades, bulletins, notifications] = await Promise.all([
             list('students'), list('users'), list('grades'), list('bulletins'), list('notifications'),
         ]);
@@ -176,12 +188,14 @@ function validateBirthDate(value, errors) {
 }
 
 export const TeacherService = {
-    list: () => list('teachers'),
+    list: () => (config.USE_MOCK ? list('teachers') : request('GET', '/teachers')),
     async get(id) {
+        if (!config.USE_MOCK) return requestOrNull('GET', `/teachers/${enc(id)}`);
         return (await list('teachers')).find((t) => t.id === id) ?? null;
     },
 
     async create(input) {
+        if (!config.USE_MOCK) return request('POST', '/teachers', { body: input });
         const [teachers, users] = await Promise.all([list('teachers'), list('users')]);
         const errors = { ...validateIdentity(input, users, null), ...validateTeacherFields(input) };
         fail(errors);
@@ -200,10 +214,11 @@ export const TeacherService = {
         });
         teachers.push(teacher);
         await Promise.all([replaceAll('teachers', teachers), replaceAll('users', users)]);
-        return teacher;
+        return { ...teacher, temporaryPassword: DEFAULT_PASSWORD, emailSent: false };
     },
 
     async update(id, input) {
+        if (!config.USE_MOCK) return request('PUT', `/teachers/${enc(id)}`, { body: input });
         const [teachers, users] = await Promise.all([list('teachers'), list('users')]);
         const teacher = teachers.find((t) => t.id === id);
         if (!teacher) throw new ValidationError('Enseignant introuvable.');
@@ -220,12 +235,14 @@ export const TeacherService = {
 
     /** Matières attribuées et séances enregistrées : ce qui empêche la suppression. */
     async usage(id) {
+        if (!config.USE_MOCK) return request('GET', `/teachers/${enc(id)}/usage`);
         const [subjects, sessions] = await Promise.all([list('subjects'), list('sessions')]);
         return { subjects: subjects.filter((s) => s.teacherId === id), sessions: sessions.filter((s) => s.teacherId === id).length };
     },
 
     /** Refusée si l'enseignant a des matières ou un historique de séances (intégrité des références). */
     async remove(id) {
+        if (!config.USE_MOCK) { await request('DELETE', `/teachers/${enc(id)}`); return; }
         const [teachers, users, notifications, checkins] = await Promise.all([list('teachers'), list('users'), list('notifications'), list('checkins')]);
         if (!teachers.some((t) => t.id === id)) throw new ValidationError('Enseignant introuvable.');
         const usage = await this.usage(id);
