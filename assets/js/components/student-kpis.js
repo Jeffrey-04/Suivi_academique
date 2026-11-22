@@ -1,5 +1,5 @@
 /*
- * Cartes d'indicateurs d'un étudiant, communes au tableau de bord de l'étudiant et à sa fiche (vue du chef).
+ * Cartes d'indicateurs d'un étudiant, affichées sur sa fiche (vue du chef).
  * `overview` = résultat de StatsService.studentOverview().
  * Chaque fonction retourne un objet « carte » : trendCard(card) pour le HTML, cardSparkline(card) pour la courbe.
  */

@@ -5,8 +5,6 @@ require_once __DIR__ . '/../Database.php';
 require_once __DIR__ . '/../Response.php';
 require_once __DIR__ . '/../Auth.php';
 require_once __DIR__ . '/../Ids.php';
-require_once __DIR__ . '/../Passwords.php';
-require_once __DIR__ . '/../Mailer.php';
 
 class PeopleController
 {
@@ -38,23 +36,13 @@ class PeopleController
 
     public function listStudents(array $params, array $body, array $query): void
     {
-        $user = Auth::requireLogin();
+        Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $sql = 'SELECT id, matricule, first_name AS firstName, last_name AS lastName, birth_date AS birthDate,
                        birth_place AS birthPlace, email, phone, filiere_id AS filiereId, level_id AS levelId, photo
                 FROM students WHERE 1=1';
         $bindings = [];
-
-        // Scoping
-        if ($user['role'] === 'etudiant') {
-            $sql .= ' AND id = ?';
-            $bindings[] = $user['profileId'];
-        } elseif ($user['role'] === 'enseignant') {
-            // Un enseignant ne voit que les étudiants de ses classes
-            $sql .= ' AND level_id IN (SELECT DISTINCT level_id FROM subjects WHERE teacher_id = ?)';
-            $bindings[] = $user['profileId'];
-        }
 
         if (!empty($query['filiereId'])) {
             $sql .= ' AND filiere_id = ?';
@@ -84,7 +72,7 @@ class PeopleController
 
     public function getStudent(array $params): void
     {
-        $user = Auth::requireLogin();
+        Auth::requireRole('chef');
         $id = $params['id'];
         $db = Database::getConnection();
 
@@ -96,18 +84,6 @@ class PeopleController
 
         if (!$student) {
             Response::json(['message' => 'Étudiant introuvable.'], 404);
-        }
-
-        // Contrôle de périmètre
-        if ($user['role'] === 'etudiant' && $user['profileId'] !== $id) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
-        if ($user['role'] === 'enseignant') {
-            $subStmt = $db->prepare('SELECT 1 FROM subjects WHERE teacher_id = ? AND level_id = ? LIMIT 1');
-            $subStmt->execute([$user['profileId'], $student['levelId']]);
-            if (!$subStmt->fetch()) {
-                Response::json(['message' => 'Accès non autorisé.'], 403);
-            }
         }
 
         Response::json($student);
@@ -145,7 +121,7 @@ class PeopleController
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors['email'] = "L'adresse e-mail n'est pas valide.";
         } else {
-            $check = $db->prepare('SELECT 1 FROM users WHERE LOWER(email) = ?');
+            $check = $db->prepare('SELECT 1 FROM students WHERE LOWER(email) = ?');
             $check->execute([$email]);
             if ($check->fetch()) {
                 $errors['email'] = 'Cette adresse e-mail est déjà utilisée.';
@@ -213,25 +189,11 @@ class PeopleController
                 $level['filiere_id'], $level['id'], $defaultPhoto
             ]);
 
-            $userId = 'usr-' . $id;
-            $tempPassword = Passwords::temporary();
-            $passHash = Passwords::hash($tempPassword);
-            $uStmt = $db->prepare('
-                INSERT INTO users (id, email, password_hash, role, profile_id, first_name, last_name, photo, active, must_change_password)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
-            ');
-            $uStmt->execute([
-                $userId, $email, $passHash, 'etudiant', $id,
-                $firstName, $lastName, $defaultPhoto
-            ]);
-
             $db->commit();
         } catch (Throwable $e) {
             $db->rollBack();
             Response::serverError($e, "La création de l'étudiant a échoué");
         }
-
-        $mail = Mailer::sendTemporaryPassword($email, "$firstName $lastName", $tempPassword, false);
 
         Response::json([
             'id'         => $id,
@@ -245,9 +207,6 @@ class PeopleController
             'filiereId'  => $level['filiere_id'],
             'levelId'    => $level['id'],
             'photo'      => $defaultPhoto,
-            // Mot de passe temporaire : affiché UNE fois au chef (il peut aussi avoir été envoyé par e-mail)
-            'temporaryPassword' => $tempPassword,
-            'emailSent'         => $mail['sent'],
         ], 201);
     }
 
@@ -283,8 +242,8 @@ class PeopleController
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors['email'] = "L'adresse e-mail n'est pas valide.";
         } else {
-            $check = $db->prepare('SELECT 1 FROM users WHERE LOWER(email) = ? AND id != ?');
-            $check->execute([$email, 'usr-' . $id]);
+            $check = $db->prepare('SELECT 1 FROM students WHERE LOWER(email) = ? AND id != ?');
+            $check->execute([$email, $id]);
             if ($check->fetch()) {
                 $errors['email'] = 'Cette adresse e-mail est déjà utilisée.';
             }
@@ -338,13 +297,6 @@ class PeopleController
                 $email, $phone, $level['filiere_id'], $level['id'], $id
             ]);
 
-            $updUser = $db->prepare('
-                UPDATE users
-                SET first_name = ?, last_name = ?, email = ?
-                WHERE id = ?
-            ');
-            $updUser->execute([$firstName, $lastName, $email, 'usr-' . $id]);
-
             $db->commit();
         } catch (Throwable $e) {
             $db->rollBack();
@@ -397,14 +349,10 @@ class PeopleController
             Response::json(['message' => 'Étudiant introuvable.'], 404);
         }
 
-        $userId = 'usr-' . $id;
-
         $db->beginTransaction();
         try {
-            $db->prepare('DELETE FROM notifications WHERE user_id = ?')->execute([$userId]);
             $db->prepare('DELETE FROM bulletins WHERE student_id = ?')->execute([$id]);
             $db->prepare('DELETE FROM grades WHERE student_id = ?')->execute([$id]);
-            $db->prepare('DELETE FROM users WHERE id = ?')->execute([$userId]);
             $db->prepare('DELETE FROM students WHERE id = ?')->execute([$id]);
             $db->commit();
         } catch (Throwable $e) {
@@ -421,7 +369,7 @@ class PeopleController
 
     public function listTeachers(): void
     {
-        Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $db = Database::getConnection();
         $stmt = $db->query('
             SELECT id, first_name AS firstName, last_name AS lastName, grade, email, phone, contract_hours AS contractHours, photo
@@ -437,13 +385,9 @@ class PeopleController
 
     public function getTeacher(array $params): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $id = $params['id'];
         $db = Database::getConnection();
-
-        if ($user['role'] === 'enseignant' && $user['profileId'] !== $id) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $stmt = $db->prepare('
             SELECT id, first_name AS firstName, last_name AS lastName, grade, email, phone, contract_hours AS contractHours, photo
@@ -487,7 +431,7 @@ class PeopleController
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors['email'] = "L'adresse e-mail n'est pas valide.";
         } else {
-            $check = $db->prepare('SELECT 1 FROM users WHERE LOWER(email) = ?');
+            $check = $db->prepare('SELECT 1 FROM teachers WHERE LOWER(email) = ?');
             $check->execute([$email]);
             if ($check->fetch()) {
                 $errors['email'] = 'Cette adresse e-mail est déjà utilisée.';
@@ -518,22 +462,11 @@ class PeopleController
             ');
             $stmt->execute([$id, $firstName, $lastName, $grade, $email, $phone, $hours, $defaultPhoto]);
 
-            $userId = 'usr-' . $id;
-            $tempPassword = Passwords::temporary();
-            $passHash = Passwords::hash($tempPassword);
-            $uStmt = $db->prepare('
-                INSERT INTO users (id, email, password_hash, role, profile_id, first_name, last_name, photo, active, must_change_password)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
-            ');
-            $uStmt->execute([$userId, $email, $passHash, 'enseignant', $id, $firstName, $lastName, $defaultPhoto]);
-
             $db->commit();
         } catch (Throwable $e) {
             $db->rollBack();
             Response::serverError($e, "La création de l'enseignant a échoué");
         }
-
-        $mail = Mailer::sendTemporaryPassword($email, "$firstName $lastName", $tempPassword, false);
 
         Response::json([
             'id'            => $id,
@@ -544,8 +477,6 @@ class PeopleController
             'phone'         => $phone,
             'contractHours' => $hours,
             'photo'         => $defaultPhoto,
-            'temporaryPassword' => $tempPassword,
-            'emailSent'         => $mail['sent'],
         ], 201);
     }
 
@@ -584,8 +515,8 @@ class PeopleController
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors['email'] = "L'adresse e-mail n'est pas valide.";
         } else {
-            $check = $db->prepare('SELECT 1 FROM users WHERE LOWER(email) = ? AND id != ?');
-            $check->execute([$email, 'usr-' . $id]);
+            $check = $db->prepare('SELECT 1 FROM teachers WHERE LOWER(email) = ? AND id != ?');
+            $check->execute([$email, $id]);
             if ($check->fetch()) {
                 $errors['email'] = 'Cette adresse e-mail est déjà utilisée.';
             }
@@ -613,13 +544,6 @@ class PeopleController
                 WHERE id = ?
             ');
             $upd->execute([$firstName, $lastName, $grade, $email, $phone, $hours, $id]);
-
-            $updUser = $db->prepare('
-                UPDATE users
-                SET first_name = ?, last_name = ?, email = ?
-                WHERE id = ?
-            ');
-            $updUser->execute([$firstName, $lastName, $email, 'usr-' . $id]);
 
             $db->commit();
         } catch (Throwable $e) {
@@ -696,13 +620,8 @@ class PeopleController
             );
         }
 
-        $userId = 'usr-' . $id;
-
         $db->beginTransaction();
         try {
-            $db->prepare('DELETE FROM notifications WHERE user_id = ?')->execute([$userId]);
-            $db->prepare('DELETE FROM checkins WHERE teacher_id = ?')->execute([$id]);
-            $db->prepare('DELETE FROM users WHERE id = ?')->execute([$userId]);
             $db->prepare('DELETE FROM teachers WHERE id = ?')->execute([$id]);
             $db->commit();
         } catch (Throwable $e) {

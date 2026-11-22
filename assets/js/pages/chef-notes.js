@@ -1,7 +1,7 @@
 /*
- * Chef : consultation des notes d'une matière (lecture seule).
+ * Chef : résultats d'une matière (consultation ; la saisie est dans « Saisie des notes »).
  * On choisit une classe puis une matière ; la feuille montre toutes les notes (brouillons compris, signalés),
- * les moyennes (notes validées seulement) et l'avancement de la validation par l'enseignant.
+ * les moyennes (notes validées seulement) et l'avancement de la validation.
  */
 
 import { url } from '../config.js';
@@ -22,7 +22,7 @@ const PASS = 10;
 function gradeCell(grade) {
     if (!grade) return '<span class="text-muted-green">—</span>';
     if (grade.status === 'validee') return formatGrade(grade.value);
-    return `<span class="grade-draft" title="Brouillon : pas encore validé par l'enseignant">${formatGrade(grade.value)} <i class="bi bi-pencil-square"></i></span>`;
+    return `<span class="grade-draft" title="Brouillon : pas encore validé">${formatGrade(grade.value)} <i class="bi bi-pencil-square"></i></span>`;
 }
 
 function rowStatus(row) {
@@ -123,7 +123,7 @@ if (ctx) {
           <div class="table-card-custom">
             <div class="table-responsive"><table class="table-custom" id="sheet-table"></table></div>
           </div>
-          <p class="stat-hint">Les notes en <span class="grade-draft">italique <i class="bi bi-pencil-square"></i></span> sont des brouillons : elles n'entrent pas dans les moyennes tant que l'enseignant ne les a pas validées.</p>`;
+          <p class="stat-hint">Les notes en <span class="grade-draft">italique <i class="bi bi-pencil-square"></i></span> sont des brouillons : elles n'entrent pas dans les moyennes tant qu'elles ne sont pas validées.</p>`;
         renderTable();
         charts.push(cardSparkline(examCard));
         bindSort($('sheet-table'), () => state.sort, (sort) => { state.sort = sort; renderTable(); });
@@ -137,6 +137,7 @@ if (ctx) {
         }
         const sync = new URLSearchParams({ subject: state.subjectId });
         window.history.replaceState(null, '', `${window.location.pathname}?${sync}`);
+        $('btn-enter-grades').href = `${url('pages/chef/saisie-notes.html')}?${sync}`;
         const result = await renderInto($('content'), () => GradeService.sheet(state.subjectId), () => '', () => mine === run);
         if (!result || mine !== run) return;
         sheet = result;
@@ -171,7 +172,7 @@ if (ctx) {
                     subtitle: [
                         ...exportInfo({ summary: `${formatNumber(rows.length)} étudiant${rows.length > 1 ? 's' : ''} · semestre ${subject.semester}` }),
                         `${cls.label} · coefficient ${subject.coefficient} · ${teacher ? fullName(teacher) : 'enseignant à attribuer'}`,
-                        ...(rows.some(hasDraft) ? ["Les notes en brouillon ne sont pas encore validées par l'enseignant : elles ne comptent pas dans les moyennes."] : []),
+                        ...(rows.some(hasDraft) ? ["Les notes en brouillon ne sont pas encore validées : elles ne comptent pas dans les moyennes."] : []),
                     ],
                     columns: [
                         { header: 'Matricule', width: 14 }, { header: 'Nom', width: 22 }, { header: 'Prénom', width: 20 },

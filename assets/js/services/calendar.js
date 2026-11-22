@@ -2,19 +2,17 @@
  * Calendrier (événements / rappels) et notifications.
  *
  * Règles de gestion (projet.md §7) :
- *  - seul le chef de département crée, modifie et supprime les événements ; tous les rôles les consultent,
- *    mais chacun ne voit que ceux dont l'audience (tableau de rôles) inclut son rôle ;
+ *  - seul le chef de département (unique utilisateur) crée, modifie, supprime et consulte les événements ;
  *  - un événement tient dans l'année universitaire en cours ; la date de fin est facultative (événement d'un jour) ;
  *    les horaires n'existent que pour un événement d'un seul jour ;
- *  - à la création / modification, le chef peut prévenir les destinataires (une notification par utilisateur, sauf lui-même) ;
- *  - les rappels automatiques (J-7, J-1, config.REMINDER_DAYS) sont générés ici en mode mock (`syncReminders`) ;
- *    avec le backend ce sera une tâche planifiée côté serveur ;
+ *  - le chef est le seul destinataire : ses rappels automatiques (J-7, J-1, config.REMINDER_DAYS) sont générés ici en mode
+ *    simulé (`syncReminders`) ; avec le backend, c'est la tâche planifiée cron/reminders.php ;
  *  - supprimer un événement supprime ses notifications.
  * Ces contrôles sont refaits ici car le backend devra les refaire : l'interface ne fait que les refléter.
  */
 
 import { config } from '../config.js';
-import { AUDIENCES, EVENT_TYPES } from '../utils/event-types.js';
+import { EVENT_TYPES } from '../utils/event-types.js';
 import { addDays, diffDays, formatDate, todayISO } from '../utils/format.js';
 import { list, replaceAll } from './data.js';
 import { ValidationError } from './errors.js';
@@ -33,18 +31,6 @@ const isDate = (value) => DATE.test(value) && !Number.isNaN(Date.parse(value));
 export function academicYearBounds() {
     const first = Number(config.ACADEMIC_YEAR.slice(0, 4));
     return { from: `${first}-09-01`, to: `${first + 1}-08-31` };
-}
-
-/** Date-heure ISO locale de « maintenant » (jour simulé en mock). */
-function nowISO() {
-    const clock = new Date();
-    const p = (n) => String(n).padStart(2, '0');
-    return `${todayISO()}T${p(clock.getHours())}:${p(clock.getMinutes())}:${p(clock.getSeconds())}`;
-}
-
-function normalizeAudience(value) {
-    const raw = Array.isArray(value) ? value : value ? [value] : [];
-    return Object.keys(AUDIENCES).filter((role) => raw.includes(role));
 }
 
 /** Valide et normalise un événement ; retourne les champs à enregistrer. */
@@ -87,52 +73,34 @@ function validateEvent(input) {
     const description = text(input.description);
     if (description.length > 500) errors.description = 'La description ne doit pas dépasser 500 caractères.';
 
-    const audience = normalizeAudience(input.audience);
-    if (!audience.length) errors.audience = 'Choisissez au moins un destinataire.';
-
     if (Object.keys(errors).length) throw new ValidationError("Corrigez les champs signalés.", errors);
-    return { type, title, start, end, startTime, endTime, location: location || null, description: description || null, audience };
+    return { type, title, start, end, startTime, endTime, location: location || null, description: description || null };
 }
 
 function requireChef(actor, action) {
     if (actor?.role !== 'chef') throw new ValidationError(`Seul le chef de département peut ${action} un événement.`);
 }
 
-/** Crée une notification par destinataire (hors acteur) ; un événement déjà passé ne notifie personne. */
-async function notifyAudience(event, kind, actor) {
-    if ((event.end ?? event.start) < todayISO()) return 0;
-    const [users, notifications] = await Promise.all([list('users'), list('notifications')]);
-    const next = idSequence('ntf', notifications, 4);
-    const createdAt = nowISO();
-    const added = users
-        .filter((u) => event.audience.includes(u.role) && u.id !== actor.id && u.active !== false && resolveSettings(u).announcements)
-        .map((u) => ({ id: next(), userId: u.id, eventId: event.id, kind, message: event.title, read: false, createdAt }));
-    if (added.length) await replaceAll('notifications', [...notifications, ...added]);
-    return added.length;
-}
-
 export const EventService = {
-    /** filters : { types, role, from, to } ; garde les événements qui chevauchent [from, to] (dates ISO) */
-    async list({ types, role, from, to } = {}) {
-        if (!config.USE_MOCK) return request('GET', '/events', { query: { types, from, to } }); // le rôle vient de la session, jamais du client
+    /** filters : { types, from, to } ; garde les événements qui chevauchent [from, to] (dates ISO) */
+    async list({ types, from, to } = {}) {
+        if (!config.USE_MOCK) return request('GET', '/events', { query: { types, from, to } });
         let items = await list('events');
         if (types) items = items.filter((e) => types.includes(e.type));
-        if (role) items = items.filter((e) => e.audience.includes(role));
         if (from) items = items.filter((e) => (e.end ?? e.start) >= from);
         if (to) items = items.filter((e) => e.start <= to);
         return items.sort((a, b) => a.start.localeCompare(b.start) || (a.startTime ?? '').localeCompare(b.startTime ?? ''));
     },
 
-    /** Un événement par id (null s'il n'existe pas ou si `role` n'est pas dans son audience). */
-    async get(id, role = null) {
+    /** Un événement par id (null s'il n'existe pas). */
+    async get(id) {
         if (!config.USE_MOCK) return requestOrNull('GET', `/events/${enc(id)}`);
-        const event = (await list('events')).find((e) => e.id === id) ?? null;
-        return event && (!role || event.audience.includes(role)) ? event : null;
+        return (await list('events')).find((e) => e.id === id) ?? null;
     },
 
     /** Prochains événements (en cours ou à venir), triés par date de début. */
-    upcoming({ types, role, limit = 5 } = {}) {
-        return this.list({ types, role, from: todayISO() }).then((items) => items.slice(0, limit));
+    upcoming({ types, limit = 5 } = {}) {
+        return this.list({ types, from: todayISO() }).then((items) => items.slice(0, limit));
     },
 
     /** Une session de rattrapage est-elle encore à venir ? (détermine le résultat « Rattrapage ») */
@@ -141,21 +109,20 @@ export const EventService = {
         return (await list('events')).some((e) => e.type === 'rattrapage' && e.start > todayISO());
     },
 
-    /** Crée un événement (chef). options.notify : prévenir les destinataires. Retourne { event, notified }. */
-    async create(input, actor, { notify = false } = {}) {
-        if (!config.USE_MOCK) return request('POST', '/events', { body: { ...input, notify } });
+    /** Crée un événement (chef). Retourne l'événement créé. */
+    async create(input, actor) {
+        if (!config.USE_MOCK) return request('POST', '/events', { body: input });
         requireChef(actor, 'créer');
         const fields = validateEvent(input);
         const events = await list('events');
         const event = { id: nextId('evt', events), ...fields, createdBy: actor.id, createdAt: todayISO() };
         await replaceAll('events', [...events, event]);
-        const notified = notify ? await notifyAudience(event, 'created', actor) : 0;
-        return { event, notified };
+        return event;
     },
 
-    /** Modifie un événement (chef). Retourne { event, notified }. */
-    async update(id, input, actor, { notify = false } = {}) {
-        if (!config.USE_MOCK) return request('PUT', `/events/${enc(id)}`, { body: { ...input, notify } });
+    /** Modifie un événement (chef). Retourne l'événement modifié. */
+    async update(id, input, actor) {
+        if (!config.USE_MOCK) return request('PUT', `/events/${enc(id)}`, { body: input });
         requireChef(actor, 'modifier');
         const events = await list('events');
         const index = events.findIndex((e) => e.id === id);
@@ -163,8 +130,7 @@ export const EventService = {
         const event = { ...events[index], ...validateEvent(input) };
         events[index] = event;
         await replaceAll('events', events);
-        const notified = notify ? await notifyAudience(event, 'updated', actor) : 0;
-        return { event, notified };
+        return event;
     },
 
     /** Supprime un événement (chef) et ses notifications. */
@@ -211,9 +177,9 @@ export const NotificationService = {
     },
 
     /**
-     * Génère les rappels automatiques de l'utilisateur (J-7, J-1…) pour les événements à venir de son audience.
+     * Génère les rappels automatiques de l'utilisateur (J-7, J-1…) pour les événements à venir.
      * Idempotent : un rappel par (utilisateur, événement, échéance). Les notifications d'origine sans `stage`
-     * comptent comme le rappel le plus lointain. Mock uniquement : avec le backend, c'est une tâche planifiée.
+     * comptent comme le rappel le plus lointain. Mode simulé uniquement : avec le backend, c'est une tâche planifiée.
      */
     async syncReminders(user) {
         if (!config.USE_MOCK) return 0; // avec le backend : tâche planifiée côté serveur (cron/reminders.php)
@@ -224,14 +190,11 @@ export const NotificationService = {
         const next = idSequence('ntf', notifications, 4);
         const added = [];
         for (const event of events) {
-            if (!event.audience.includes(user.role)) continue;
             const left = diffDays(today, event.start);
             const stage = left < 0 ? undefined : days.find((d) => left <= d);
             if (stage === undefined) continue;
             const due = addDays(event.start, -stage);
-            const known = notifications.some((n) => n.userId === user.id && n.eventId === event.id && (n.kind === 'created' || n.kind === 'updated'
-                ? n.createdAt.slice(0, 10) >= due // annonce récente : elle tient lieu de rappel
-                : (n.stage ?? days[days.length - 1]) <= stage));
+            const known = notifications.some((n) => n.userId === user.id && n.eventId === event.id && (n.stage ?? days[days.length - 1]) <= stage);
             if (known) continue;
             added.push({
                 id: next(), userId: user.id, eventId: event.id, kind: 'reminder', stage, message: event.title,

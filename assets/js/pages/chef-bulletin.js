@@ -9,8 +9,7 @@ const ctx = await initPage({ role: 'chef', page: 'bulletins' });
 if (ctx) {
     await initBulletinPage({
         studentId: new URLSearchParams(window.location.search).get('student'),
-        mode: 'chef',
-        actor: { id: ctx.user.id, role: ctx.user.role, profileId: ctx.user.profileId },
+        actor: { id: ctx.user.id, role: ctx.user.role },
         listUrl: url('pages/chef/bulletins.html'),
     });
 }

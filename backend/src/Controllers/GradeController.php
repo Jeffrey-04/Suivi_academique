@@ -16,7 +16,7 @@ class GradeController
 
     public function listGrades(array $params, array $body, array $query): void
     {
-        $user = Auth::requireLogin();
+        Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $sql = 'SELECT id, student_id AS studentId, subject_id AS subjectId, type, value, status,
@@ -24,16 +24,7 @@ class GradeController
                 FROM grades WHERE 1=1';
         $bindings = [];
 
-        // Sécurité périmètre
-        if ($user['role'] === 'etudiant') {
-            $sql .= ' AND student_id = ? AND status = "validee"';
-            $bindings[] = $user['profileId'];
-        } elseif ($user['role'] === 'enseignant') {
-            $sql .= ' AND subject_id IN (SELECT id FROM subjects WHERE teacher_id = ?)';
-            $bindings[] = $user['profileId'];
-        }
-
-        if (!empty($query['studentId']) && $user['role'] !== 'etudiant') {
+        if (!empty($query['studentId'])) {
             $sql .= ' AND student_id = ?';
             $bindings[] = $query['studentId'];
         }
@@ -48,7 +39,7 @@ class GradeController
                 array_push($bindings, ...$ids);
             }
         }
-        if (!empty($query['status']) && $user['role'] !== 'etudiant') {
+        if (!empty($query['status'])) {
             $sql .= ' AND status = ?';
             $bindings[] = $query['status'];
         }
@@ -80,7 +71,7 @@ class GradeController
 
     public function gradeSheet(array $params): void
     {
-        $user = Auth::requireLogin();
+        Auth::requireRole('chef');
         $subjectId = $params['id'];
         $db = Database::getConnection();
 
@@ -96,13 +87,6 @@ class GradeController
         $sub = $stmt->fetch();
         if (!$sub) {
             Response::json(['message' => 'Matière introuvable.'], 404);
-        }
-
-        if ($user['role'] === 'enseignant' && $sub['teacherId'] !== $user['profileId']) {
-            Response::validationError("Vous n'êtes pas l'enseignant de cette matière.");
-        }
-        if ($user['role'] === 'etudiant') {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
         }
 
         $teacher = null;
@@ -191,7 +175,7 @@ class GradeController
 
     public function saveDrafts(array $params, array $body): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $config = require __DIR__ . '/../../config/config.php';
         $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $subjectId = $params['id'];
@@ -205,12 +189,6 @@ class GradeController
             Response::validationError('Matière introuvable.');
         }
 
-        if ($user['role'] !== 'enseignant') {
-            Response::validationError("Seul l'enseignant de la matière peut saisir et valider les notes.");
-        }
-        if ($subject['teacher_id'] !== $user['profileId']) {
-            Response::validationError("Vous n'êtes pas l'enseignant de cette matière.");
-        }
         if (!in_array($type, ['CC', 'EXAMEN', 'RATTRAPAGE'], true)) {
             Response::validationError("Type d'évaluation inconnu.");
         }
@@ -342,7 +320,7 @@ class GradeController
 
     public function validateGrades(array $params): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $config = require __DIR__ . '/../../config/config.php';
         $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $subjectId = $params['id'];
@@ -356,12 +334,6 @@ class GradeController
             Response::validationError('Matière introuvable.');
         }
 
-        if ($user['role'] !== 'enseignant') {
-            Response::validationError("Seul l'enseignant de la matière peut saisir et valider les notes.");
-        }
-        if ($subject['teacher_id'] !== $user['profileId']) {
-            Response::validationError("Vous n'êtes pas l'enseignant de cette matière.");
-        }
         if (!in_array($type, ['CC', 'EXAMEN', 'RATTRAPAGE'], true)) {
             Response::validationError("Type d'évaluation inconnu.");
         }
@@ -386,13 +358,9 @@ class GradeController
 
     public function studentHistory(array $params): void
     {
-        $user = Auth::requireRole('chef', 'etudiant');
+        Auth::requireRole('chef');
         $studentId = $params['id'];
         $db = Database::getConnection();
-
-        if ($user['role'] === 'etudiant' && $user['profileId'] !== $studentId) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $stmt = $db->prepare('
             SELECT g.id, g.student_id AS studentId, g.subject_id AS subjectId, g.type, g.value, g.status,

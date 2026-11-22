@@ -4,7 +4,7 @@
  *
  * Ordre de priorité (du plus faible au plus fort) :
  *   1. les valeurs par défaut ci-dessous ;
- *   2. les variables d'environnement (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, MAIL_*, APP_URL, CRON_TOKEN, INSTALL_KEY, APP_DEBUG, CORS_ORIGINS) ;
+ *   2. les variables d'environnement (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, CRON_TOKEN, INSTALL_KEY, APP_DEBUG, CORS_ORIGINS) ;
  *   3. le fichier config/config.local.php (non versionné : secrets de la base, clé d'API e-mail, jetons).
  * Le mode de l'instance (« demo » ou « production ») est écrit par l'installateur dans storage/instance.json.
  */
@@ -49,9 +49,7 @@ $defaultConfig = [
     'academic_year'     => '2026-2027',
     'current_semester'  => 'S1',
     'semester_start'    => '2026-09-14',
-    'session_edit_days' => 15,
     'reminder_days'     => [7, 1],
-    'checkin_max_accuracy' => 100, // mètres
 
     // Date du jour : null = vraie date du serveur. Le mode « demo » la fixe au 25/01/2027 (cohérente avec le jeu d'essai).
     'simulated_today'   => null,
@@ -61,13 +59,6 @@ $defaultConfig = [
         'university' => ['fr' => 'UNIVERSITÉ DE DÉMONSTRATION', 'en' => 'DEMONSTRATION UNIVERSITY'],
         'faculty'    => ['fr' => 'FACULTÉ DES SCIENCES ET TECHNIQUES', 'en' => 'FACULTY OF SCIENCE AND TECHNOLOGY'],
         'domain'     => ['fr' => 'SCIENCES ET TECHNOLOGIES', 'en' => 'SCIENCE AND TECHNOLOGY'],
-        'location'   => [
-            'name'         => 'Campus de démonstration',
-            'lat'          => 3.8667,
-            'lng'          => 11.5167,
-            'radiusMeters' => 300,
-            'maxAccuracy'  => 100,
-        ],
         'dean' => [
             'title' => ['fr' => "Le Chef d'Établissement", 'en' => 'The Dean / Director'],
             'name'  => 'Pr. Marcel Ekani',
@@ -99,16 +90,6 @@ $defaultConfig = [
     'cron_token'  => (string)$env('CRON_TOKEN', ''),
     // Clé demandée par install.php (sauf depuis localhost) ; vide = installation web refusée à distance
     'install_key' => (string)$env('INSTALL_KEY', ''),
-
-    // E-mails (mot de passe temporaire) : fournisseur « brevo » (API HTTP gratuite), « log » (développement) ou « none »
-    'mail' => [
-        'provider'   => (string)$env('MAIL_PROVIDER', 'none'),
-        'api_key'    => (string)$env('MAIL_API_KEY', ''),
-        'api_url'    => (string)$env('MAIL_API_URL', 'https://api.brevo.com/v3/smtp/email'),
-        'from_email' => (string)$env('MAIL_FROM_EMAIL', ''),
-        'from_name'  => (string)$env('MAIL_FROM_NAME', 'Suivi Académique'),
-        'app_url'    => (string)$env('APP_URL', ''), // adresse publique du site, pour le lien de connexion
-    ],
 ];
 
 // Surcharge locale (non versionnée)

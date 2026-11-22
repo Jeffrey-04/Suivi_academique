@@ -38,21 +38,6 @@ return [
     'cron_token' => '',
 
     // -------------------------------------------------------------------------
-    // E-mails (mot de passe temporaire à la création / réinitialisation d'un compte).
-    // Les hébergements gratuits bloquent l'envoi direct : on utilise l'API HTTP gratuite de Brevo
-    // (300 e-mails/jour, https://www.brevo.com) : créer un compte, valider une adresse d'expédition
-    // (Expéditeurs et IP), puis créer une clé d'API (SMTP et API > Clés d'API).
-    // provider : 'brevo' | 'log' (développement : écrit dans storage/logs/app.log, mot de passe en clair) | 'none'
-    // -------------------------------------------------------------------------
-    'mail' => [
-        'provider'   => 'brevo',
-        'api_key'    => 'xkeysib-…',
-        'from_email' => 'adresse-validée-chez-brevo@votre-domaine.cm',
-        'from_name'  => 'Suivi Académique',
-        'app_url'    => 'https://votre-site.infinityfreeapp.com', // lien de connexion dans l'e-mail
-    ],
-
-    // -------------------------------------------------------------------------
     // Paramètres académiques (renvoyés au frontend : source unique de vérité)
     // -------------------------------------------------------------------------
     'academic_year'    => '2026-2027',
@@ -62,13 +47,11 @@ return [
 
     // -------------------------------------------------------------------------
     // Établissement (imprimé sur les relevés de notes) : REMPLACEZ les valeurs fictives de démonstration.
-    // La position du campus et le rayon servent à « Marquer ma présence » (maxAccuracy : précision GPS tolérée, en mètres).
     // -------------------------------------------------------------------------
     // 'institution' => [
     //     'university' => ['fr' => 'UNIVERSITÉ DE …', 'en' => 'UNIVERSITY OF …'],
     //     'faculty'    => ['fr' => 'FACULTÉ DES …',   'en' => 'FACULTY OF …'],
     //     'domain'     => ['fr' => 'SCIENCES …',      'en' => 'SCIENCES …'],
-    //     'location'   => ['name' => 'Campus central', 'lat' => 3.8667, 'lng' => 11.5167, 'radiusMeters' => 300, 'maxAccuracy' => 100],
     //     'dean'       => ['title' => ['fr' => 'Le Doyen', 'en' => 'The Dean'], 'name' => 'Pr. …'],
     // ],
 

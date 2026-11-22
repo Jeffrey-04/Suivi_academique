@@ -1,10 +1,8 @@
-// Outils communs : client HTTP avec cookies (un par rôle) et comparateur de formes JSON
+// Outils communs : client HTTP avec cookies (un par « rôle » : le chef, plus un client anonyme) et comparateur de formes JSON
 export const BASE = process.env.API_BASE ?? 'http://localhost:8000/backend/api';
 const jars = {};
 export const ACCOUNTS = {
-  chef: { email: 'chef@dept-info.demo', actor: { id: 'usr-chef', role: 'chef', profileId: null } },
-  enseignant: { email: 'herve.kamga@dept-info.demo', actor: { id: 'usr-tea-005', role: 'enseignant', profileId: 'tea-005' } },
-  etudiant: { email: 'ulrich.foning@etu.dept-info.demo', actor: { id: 'usr-stu-018', role: 'etudiant', profileId: 'stu-018' } },
+  chef: { email: 'chef@dept-info.demo', actor: { id: 'usr-chef', role: 'chef' } },
 };
 export async function call(role, method, path, body, { raw = false } = {}) {
   const jar = (jars[role] ??= {});

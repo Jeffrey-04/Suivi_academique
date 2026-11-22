@@ -12,14 +12,14 @@ import { config, url } from '../config.js';
 import { initPage } from '../layout.js';
 import { compare, trend } from '../utils/calculs.js';
 import { CHART_COLORS, donut, groupedBars, sparkline } from '../utils/charts.js';
-import { formatDate, formatDateRange, formatHours, formatNumber, fullName, todayISO } from '../utils/format.js';
+import { addDays, formatDate, formatDateRange, formatHours, formatNumber, fullName, todayISO } from '../utils/format.js';
 import { initPeriodPicker } from '../utils/period.js';
 import {
     activityList, alertCard, chartLegend, describeTrend, emptyState, eventList, eventType, eventUrl, progressList, promoCard,
     renderInto, sinceWeeks, statCard, trendCard,
 } from '../utils/ui.js';
 import {
-    BulletinService, EventService, GradeService, SessionService, StatsService, StudentService,
+    BulletinService, EventService, GradeService, SessionService, StatsService, StudentService, TeacherService, SubjectService, TimetableService, WEEKDAYS,
 } from '../services/index.js';
 
 const $ = (id) => document.getElementById(id);
@@ -140,6 +140,32 @@ if (ctx) {
         onChange: (next) => { range = next; loadTeaching(); },
     });
     loadTeaching();
+
+    // --- Emploi du temps : séances prévues, passées, dont rien n'est enregistré (indépendant de la période) -----
+    const TODO_LIMIT = 5;
+    renderInto(
+        $('timetable-todo'),
+        async () => {
+            const from = config.SEMESTER_START > addDays(todayISO(), -366) ? config.SEMESTER_START : addDays(todayISO(), -366);
+            const [pending, teachers, subjects] = await Promise.all([
+                TimetableService.occurrences({ from, to: todayISO(), status: 'toConfirm' }), TeacherService.list(), SubjectService.list(),
+            ]);
+            return { pending: pending.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)), teachers, subjects };
+        },
+        ({ pending, teachers, subjects }) => {
+            if (!pending.length) return emptyState("Tout est à jour : chaque séance prévue par l'emploi du temps est enregistrée.", 'bi-check2-circle');
+            const teacherById = new Map(teachers.map((t) => [t.id, t]));
+            const subjectById = new Map(subjects.map((s) => [s.id, s]));
+            const more = pending.length - TODO_LIMIT;
+            return activityList(pending.slice(0, TODO_LIMIT).map((o) => ({
+                icon: 'bi-hourglass-split',
+                title: subjectById.get(o.subjectId)?.name ?? 'Matière supprimée',
+                subtitle: `${fullName(teacherById.get(o.teacherId))} · ${WEEKDAYS[o.weekday]} ${formatDate(o.date)} · ${o.startTime}-${o.endTime}`,
+                amount: 'À confirmer',
+                amountClass: 'text-warning',
+            }))) + (more > 0 ? `<p class="stat-hint px-3 pb-3 mb-0">et ${formatNumber(more)} autre${more > 1 ? 's' : ''} séance${more > 1 ? 's' : ''}…</p>` : '');
+        },
+    );
 
     // --- Calendrier ---------------------------------------------------------------------------------
     EventService.upcoming({ types: ['cc', 'stage', 'session_normale', 'rattrapage'], limit: 6 }).then((events) => {

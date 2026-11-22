@@ -1,9 +1,6 @@
 /*
- * Recherche rapide de la barre du haut. Chaque rôle cherche dans son périmètre :
- *  - chef : étudiants, enseignants, matières, événements ;
- *  - enseignant : ses matières, événements ;
- *  - étudiant : événements.
- * Les résultats mènent à la fiche ou à la page concernée. Les droits sont ceux des services (un rôle ne voit que ses événements).
+ * Recherche rapide de la barre du haut : étudiants, enseignants, matières et événements du calendrier.
+ * Les résultats mènent à la fiche ou à la page concernée.
  */
 
 import { url } from '../config.js';
@@ -18,37 +15,31 @@ const matches = (needle, ...fields) => normalize(fields.filter(Boolean).join(' '
 
 async function search(user, q) {
     const needle = normalize(q.trim());
-    const role = user.role;
     const groups = [];
-    const tasks = [];
-
-    if (role === 'chef') {
-        tasks.push(StudentService.list({ q }).then((items) => groups.push({
+    const tasks = [
+        StudentService.list({ q }).then((items) => groups.push({
             label: 'Étudiants',
             items: items.slice(0, PER_GROUP).map((s) => ({ icon: 'bi-person', title: fullName(s), sub: s.matricule, href: url(`pages/chef/etudiant.html?id=${encodeURIComponent(s.id)}`) })),
-        })));
-        tasks.push(TeacherService.list().then((items) => groups.push({
+        })),
+        TeacherService.list().then((items) => groups.push({
             label: 'Enseignants',
             items: items.filter((t) => matches(needle, t.firstName, t.lastName, t.email)).slice(0, PER_GROUP)
                 .map((t) => ({ icon: 'bi-person-workspace', title: fullName(t), sub: t.grade, href: url(`pages/chef/enseignant.html?id=${encodeURIComponent(t.id)}`) })),
-        })));
-    }
-    if (role === 'chef' || role === 'enseignant') {
-        tasks.push(SubjectService.list(role === 'enseignant' ? { teacherId: user.profileId } : {}).then((items) => groups.push({
+        })),
+        SubjectService.list().then((items) => groups.push({
             label: 'Matières',
             items: items.filter((s) => matches(needle, s.code, s.name)).slice(0, PER_GROUP).map((s) => ({
-                icon: 'bi-book', title: s.name, sub: s.code,
-                href: url(role === 'chef' ? `pages/chef/matieres.html?q=${encodeURIComponent(s.code)}` : 'pages/enseignant/matieres.html'),
+                icon: 'bi-book', title: s.name, sub: s.code, href: url(`pages/chef/matieres.html?q=${encodeURIComponent(s.code)}`),
             })),
-        })));
-    }
-    tasks.push(EventService.list({ role: role === 'chef' ? undefined : role }).then((items) => groups.push({
-        label: 'Calendrier',
-        items: items.filter((e) => matches(needle, e.title, e.location, eventType(e.type).label)).slice(0, PER_GROUP).map((e) => ({
-            icon: eventType(e.type).icon, title: e.title, sub: formatDateRange(e.start, e.end),
-            href: url(`pages/${role}/calendrier.html?event=${encodeURIComponent(e.id)}`),
         })),
-    })));
+        EventService.list().then((items) => groups.push({
+            label: 'Calendrier',
+            items: items.filter((e) => matches(needle, e.title, e.location, eventType(e.type).label)).slice(0, PER_GROUP).map((e) => ({
+                icon: eventType(e.type).icon, title: e.title, sub: formatDateRange(e.start, e.end),
+                href: url(`pages/${user.role}/calendrier.html?event=${encodeURIComponent(e.id)}`),
+            })),
+        })),
+    ];
 
     await Promise.all(tasks);
     const order = ['Étudiants', 'Enseignants', 'Matières', 'Calendrier'];

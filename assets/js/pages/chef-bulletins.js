@@ -36,7 +36,7 @@ const statusBadge = (row) => {
 const ctx = await initPage({ role: 'chef', page: 'bulletins' });
 
 if (ctx) {
-    const actor = { id: ctx.user.id, role: ctx.user.role, profileId: ctx.user.profileId };
+    const actor = { id: ctx.user.id, role: ctx.user.role };
     const state = { q: '', filiere: '', level: '', status: '', sort: { key: 'name', dir: 'asc' }, page: 1, highlight: null };
     let rows = [];
     let classes = [];
@@ -173,7 +173,7 @@ if (ctx) {
                 ...(fresh ? [`${formatNumber(fresh)} nouveau${plural(fresh, '', 'x')} bulletin${plural(fresh, '')}`] : []),
                 ...(stale ? [`${formatNumber(stale)} bulletin${plural(stale, '')} régénéré${plural(stale, '')} (notes modifiées depuis)`] : []),
                 ...(incomplete ? [`${formatNumber(incomplete)} étudiant${plural(incomplete, '')} au relevé incomplet ${plural(incomplete, 'est ignoré', 'sont ignorés')}.`] : []),
-                'Le bulletin devient visible par l\'étudiant dès sa génération.',
+                'Le bulletin généré est un instantané : il reste identique tant qu\'il n\'est pas régénéré.',
             ],
             confirmLabel: 'Générer',
         });

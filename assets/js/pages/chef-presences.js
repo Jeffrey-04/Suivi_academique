@@ -1,7 +1,9 @@
 /*
- * Chef : présences et absences des enseignants (analyse, module 4).
+ * Chef : séances, présences et absences des enseignants (analyse, module 4).
  * Journal des séances du semestre : date, horaire, enseignant, matière, durée, statut présent / absent.
- * Le chef enregistre les absences et peut corriger ou retirer toute séance. Le sélecteur de période filtre le journal.
+ * Le chef déclare les séances effectuées, enregistre les absences et peut corriger ou retirer toute séance
+ * (les séances prévues par l'emploi du temps se confirment depuis la page « Emploi du temps »).
+ * Le sélecteur de période filtre le journal.
  */
 
 import { config } from '../config.js';
@@ -24,7 +26,7 @@ const normalize = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLo
 const ctx = await initPage({ role: 'chef', page: 'attendance' });
 
 if (ctx) {
-    const actor = { id: ctx.user.id, role: ctx.user.role, profileId: ctx.user.profileId };
+    const actor = { id: ctx.user.id, role: ctx.user.role };
     const state = { q: '', teacher: '', status: '', sort: { key: 'date', dir: 'desc' }, page: 1, highlight: null };
     let range = { from: config.SEMESTER_START, to: todayISO() };
     let rows = [];
@@ -67,14 +69,13 @@ if (ctx) {
 
         $('table-body').innerHTML = page.items.length ? page.items.map((r) => {
             const absent = r.status === 'absent';
-            const by = r.declaredBy === 'usr-chef' ? 'Saisie par le chef' : "Déclarée par l'enseignant";
             return `
             <tr data-id="${esc(r.id)}"${r.id === state.highlight ? ' class="row-flash"' : ''}>
               <td><div class="table-product-name">${esc(weekdayShort(r.date))} ${esc(formatDate(r.date))}</div><div class="table-user-sub">${esc(r.startTime)} - ${esc(r.endTime)}</div></td>
               <td>${userCell(r.teacher, r.teacher.grade)}</td>
               <td class="d-none d-lg-table-cell"><div class="table-product-name">${esc(r.subject.name)}</div><div class="table-user-sub">${esc(r.subject.code)} · ${esc(r.cls?.short ?? '')}</div></td>
               <td class="table-amount">${esc(formatHours(r.hours))}</td>
-              <td><span class="badge-table ${absent ? 'failed' : 'success'}">${esc(SESSION_STATUS[r.status])}</span>${r.verified ? ' <i class="bi bi-geo-alt-fill text-success" title="Présence géolocalisée" role="img" aria-label="Présence géolocalisée"></i>' : ''}<div class="table-user-sub">${esc(absent ? (r.note ?? 'Raison non communiquée') : by)}</div></td>
+              <td><span class="badge-table ${absent ? 'failed' : 'success'}">${esc(SESSION_STATUS[r.status])}</span><div class="table-user-sub">${esc(absent ? (r.note ?? 'Raison non communiquée') : (r.note ?? ''))}</div></td>
               <td>
                 <div class="d-flex justify-content-center gap-1">
                   <button type="button" class="table-btn-action" data-action="edit" title="Corriger" aria-label="Corriger la séance du ${esc(formatDate(r.date))} de ${esc(fullName(r.teacher))}"><i class="bi bi-pencil"></i></button>
@@ -153,26 +154,27 @@ if (ctx) {
         }
     });
 
-    async function addAbsence() {
-        const saved = await openSessionForm({ mode: 'absence', actor });
+    async function addSession(mode) {
+        const saved = await openSessionForm({ mode, actor });
         if (!saved) return;
-        // L'absence doit être visible : on élargit la période si besoin et on lève les filtres
+        // La séance doit être visible : on élargit la période si besoin et on lève les filtres
         range = { from: range.from < saved.date ? range.from : saved.date, to: range.to > saved.date ? range.to : saved.date };
         Object.assign(state, { q: '', teacher: '', status: '', sort: { key: 'date', dir: 'desc' }, highlight: saved.id });
         ['search', 'filter-teacher', 'filter-status'].forEach((id) => { $(id).value = ''; });
         await load();
     }
-    $('btn-add').addEventListener('click', addAbsence);
+    $('btn-declare').addEventListener('click', () => addSession('declare'));
+    $('btn-add').addEventListener('click', () => addSession('absence'));
 
     mountExportMenu($('export-menu'), {
         getSpec() {
             const data = visibleRows();
             if (!data.length) return null;
             return {
-                filename: 'presences',
+                filename: 'seances',
                 sheets: [{
                     name: 'Séances',
-                    title: 'Présences et absences des enseignants',
+                    title: 'Séances, présences et absences des enseignants',
                     subtitle: exportInfo({
                         summary: `${formatNumber(data.length)} séance${data.length > 1 ? 's' : ''} du ${formatDate(range.from)} au ${formatDate(range.to)}`,
                         filters: describeFilters([['Recherche', $('search')], ['Enseignant', $('filter-teacher')], ['Statut', $('filter-status')]]),
@@ -182,11 +184,11 @@ if (ctx) {
                         { header: 'Enseignant', width: 26 }, { header: 'Matière', width: 36 }, { header: 'Code', width: 11 }, { header: 'Classe', width: 12, align: 'center' },
                         { header: 'Durée (h)', type: 'decimal', width: 11 },
                         { header: 'Statut', width: 12, align: 'center', tone: (v) => (v === 'Présent' ? 'good' : 'bad') },
-                        { header: 'Motif / observation', width: 30 }, { header: 'Saisie', width: 24 },
+                        { header: 'Motif / observation', width: 36 },
                     ],
                     rows: data.map((r) => [
                         r.date, r.startTime, r.endTime, fullName(r.teacher), r.subject.name, r.subject.code, r.cls?.short ?? '', r.hours,
-                        SESSION_STATUS[r.status], r.note ?? '', r.declaredBy === 'usr-chef' ? 'Chef de département' : "Déclarée par l'enseignant",
+                        SESSION_STATUS[r.status], r.note ?? '',
                     ]),
                 }],
             };
@@ -204,9 +206,10 @@ if (ctx) {
         $('filter-teacher').innerHTML = '<option value="">Tous les enseignants</option>' +
             [...teachers].sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr')).map((t) => `<option value="${esc(t.id)}">${esc(fullName(t))}</option>`).join('');
         await load();
-        if (new URLSearchParams(window.location.search).get('new') === '1') {
+        const wanted = new URLSearchParams(window.location.search).get('new'); // raccourcis de la barre du haut
+        if (wanted === '1' || wanted === 'declare') {
             window.history.replaceState(null, '', window.location.pathname);
-            addAbsence();
+            addSession(wanted === 'declare' ? 'declare' : 'absence');
         }
     } catch (error) {
         console.error(error);

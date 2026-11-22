@@ -2,7 +2,7 @@
  * Pédagogie : matières, notes, bulletins.
  *
  * Règles de gestion des notes (projet.md §7) :
- *  - seul l'enseignant de la matière saisit et valide ; le chef et les étudiants consultent ;
+ *  - le chef de département (seul utilisateur) saisit et valide les notes, pour n'importe quelle matière ;
  *  - une note est d'abord un brouillon (modifiable, effaçable), puis validée : elle est alors verrouillée
  *    et seules les notes validées entrent dans les moyennes et les bulletins ;
  *  - le rattrapage n'existe que pour un étudiant dont la moyenne (CC + examen) est inférieure à 10.
@@ -16,6 +16,7 @@ import { EventService } from './calendar.js';
 import { list, replaceAll } from './data.js';
 import { ValidationError } from './errors.js';
 import { idSequence, nextId } from './ids.js';
+import { countSlots, teacherChangeConflict } from './timetable.js';
 import { request, requestOrNull } from './api.js';
 
 const enc = encodeURIComponent;
@@ -86,10 +87,18 @@ export const SubjectService = {
         if (!subject) throw new ValidationError('Matière introuvable.');
         const { errors, code, coefficient, hours } = validateSubject(input, { subjects, levels, teachers, units, ownId: id });
         const usage = await this.usage(id);
-        // Classe et semestre ne peuvent plus changer dès que des notes ou des séances s'y rattachent
-        if (usage.grades || usage.sessions) {
-            if (input.levelId !== subject.levelId) errors.levelId = 'Classe non modifiable : des notes ou des séances sont déjà enregistrées.';
-            if (input.semester !== subject.semester) errors.semester = 'Semestre non modifiable : des notes ou des séances sont déjà enregistrées.';
+        // Classe et semestre ne peuvent plus changer dès que des notes, des séances ou des créneaux s'y rattachent
+        if (usage.grades || usage.sessions || usage.slots) {
+            if (input.levelId !== subject.levelId) errors.levelId = "Classe non modifiable : des notes, des séances ou des créneaux d'emploi du temps sont déjà enregistrés.";
+            if (input.semester !== subject.semester) errors.semester = "Semestre non modifiable : des notes, des séances ou des créneaux d'emploi du temps sont déjà enregistrés.";
+        }
+        // La grille suit l'enseignant de la matière : un nouveau titulaire ne doit pas avoir déjà cours à ces heures
+        const newTeacher = text(input.teacherId) || null;
+        if (newTeacher && !errors.teacherId && newTeacher !== subject.teacherId) {
+            const conflict = await teacherChangeConflict(id, newTeacher);
+            if (conflict) errors.teacherId = conflict;
+        } else if (!newTeacher && usage.slots) {
+            errors.teacherId = "Cette matière a des créneaux d'emploi du temps : un enseignant est nécessaire.";
         }
         fail(errors);
         Object.assign(subject, {
@@ -100,11 +109,11 @@ export const SubjectService = {
         return subject;
     },
 
-    /** Notes et séances rattachées : ce qui empêche la suppression et le changement de classe. */
+    /** Notes, séances et créneaux rattachés : ce qui empêche le changement de classe (et la suppression, sauf les créneaux). */
     async usage(id) {
         if (!config.USE_MOCK) return request('GET', `/subjects/${enc(id)}/usage`);
-        const [grades, sessions] = await Promise.all([list('grades'), list('sessions')]);
-        return { grades: grades.filter((g) => g.subjectId === id).length, sessions: sessions.filter((s) => s.subjectId === id).length };
+        const [grades, sessions, slots] = await Promise.all([list('grades'), list('sessions'), countSlots(id)]);
+        return { grades: grades.filter((g) => g.subjectId === id).length, sessions: sessions.filter((s) => s.subjectId === id).length, slots };
     },
 
     async remove(id) {
@@ -118,19 +127,21 @@ export const SubjectService = {
             if (usage.sessions) parts.push(`${usage.sessions} séance${usage.sessions > 1 ? 's' : ''}`);
             throw new ValidationError(`Suppression impossible : cette matière a ${parts.join(' et ')} enregistrée${usage.grades + usage.sessions > 1 ? 's' : ''}.`);
         }
-        const checkins = await list('checkins');
+        // Les créneaux d'emploi du temps de la matière (et leurs annulations) partent avec elle
+        const [slots, exceptions] = await Promise.all([list('timetableSlots'), list('timetableExceptions')]);
+        const slotIds = new Set(slots.filter((t) => t.subjectId === id).map((t) => t.id));
         await Promise.all([
             replaceAll('subjects', subjects.filter((s) => s.id !== id)),
-            replaceAll('checkins', checkins.filter((c) => c.subjectId !== id)), // simples repères de présence : ne bloquent pas la suppression
+            replaceAll('timetableSlots', slots.filter((t) => !slotIds.has(t.id))),
+            replaceAll('timetableExceptions', exceptions.filter((e) => !slotIds.has(e.slotId))),
         ]);
     },
 };
 
 // ---- Notes ---------------------------------------------------------------------------------------
 
-function assertCanGrade(subject, actor) {
-    if (!actor || actor.role !== 'enseignant') throw new ValidationError("Seul l'enseignant de la matière peut saisir et valider les notes.");
-    if (subject.teacherId !== actor.profileId) throw new ValidationError("Vous n'êtes pas l'enseignant de cette matière.");
+function assertCanGrade(actor) {
+    if (actor?.role !== 'chef') throw new ValidationError('Seul le chef de département peut saisir et valider les notes.');
 }
 
 /** Dernière note d'un type donné pour un étudiant (ou null). */
@@ -209,7 +220,7 @@ export const GradeService = {
         const [subjects, students, grades] = await Promise.all([list('subjects'), list('students'), list('grades')]);
         const subject = subjects.find((s) => s.id === subjectId);
         if (!subject) throw new ValidationError('Matière introuvable.');
-        assertCanGrade(subject, actor);
+        assertCanGrade(actor);
         if (!GRADE_TYPES[type]) throw new ValidationError("Type d'évaluation inconnu.");
 
         const classIds = new Set(students.filter((s) => s.levelId === subject.levelId).map((s) => s.id));
@@ -256,7 +267,7 @@ export const GradeService = {
         const [subjects, grades] = await Promise.all([list('subjects'), list('grades')]);
         const subject = subjects.find((s) => s.id === subjectId);
         if (!subject) throw new ValidationError('Matière introuvable.');
-        assertCanGrade(subject, actor);
+        assertCanGrade(actor);
         const drafts = grades.filter((g) => g.subjectId === subjectId && g.type === type && g.status === 'brouillon');
         if (!drafts.length) throw new ValidationError('Aucune note en brouillon à valider pour cette évaluation.');
         drafts.forEach((g) => Object.assign(g, { status: 'validee', validatedBy: actor.id, validatedAt: todayISO() }));

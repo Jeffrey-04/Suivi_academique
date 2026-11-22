@@ -234,16 +234,13 @@ class BulletinController
 
     public function listBulletins(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'etudiant');
+        Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $sql = 'SELECT * FROM bulletins WHERE 1=1';
         $bindings = [];
 
-        if ($user['role'] === 'etudiant') {
-            $sql .= ' AND student_id = ?';
-            $bindings[] = $user['profileId'];
-        } elseif (!empty($query['studentId'])) {
+        if (!empty($query['studentId'])) {
             $sql .= ' AND student_id = ?';
             $bindings[] = $query['studentId'];
         }
@@ -279,16 +276,12 @@ class BulletinController
 
     public function studentReport(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'etudiant');
+        Auth::requireRole('chef');
         $studentId = $params['id'];
         $config = require __DIR__ . '/../../config/config.php';
         $semester = $query['semester'] ?? $config['current_semester'];
         $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $db = Database::getConnection();
-
-        if ($user['role'] === 'etudiant' && $user['profileId'] !== $studentId) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $ctx = self::loadContext($db, $semester, $todayStr);
         $rows = self::getOverviewRows($ctx);
@@ -314,16 +307,12 @@ class BulletinController
 
     public function studentBulletin(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'etudiant');
+        Auth::requireRole('chef');
         $studentId = $params['id'];
         $config = require __DIR__ . '/../../config/config.php';
         $semester = $query['semester'] ?? $config['current_semester'];
         $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $db = Database::getConnection();
-
-        if ($user['role'] === 'etudiant' && $user['profileId'] !== $studentId) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $ctx = self::loadContext($db, $semester, $todayStr);
         $rows = self::getOverviewRows($ctx);
@@ -379,16 +368,12 @@ class BulletinController
 
     public function studentDocument(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'etudiant');
+        Auth::requireRole('chef');
         $studentId = $params['id'];
         $config = require __DIR__ . '/../../config/config.php';
         $semester = $query['semester'] ?? $config['current_semester'];
         $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $db = Database::getConnection();
-
-        if ($user['role'] === 'etudiant' && $user['profileId'] !== $studentId) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $ctx = self::loadContext($db, $semester, $todayStr);
         $rows = self::getOverviewRows($ctx);

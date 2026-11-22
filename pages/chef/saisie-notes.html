@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Déclarer une séance - Suivi Académique</title>
+  <title>Saisie des notes - Suivi Académique</title>
   <link rel="icon" type="image/png" href="../../assets/images/favicon.ico">
   <link rel="stylesheet" href="../../assets/libs/bootstrap/css/bootstrap.min.css">
   <link rel="stylesheet" href="../../assets/libs/bootstrap-icons/bootstrap-icons.css">
@@ -20,36 +20,31 @@
     <main>
       <div class="page-header">
         <div>
-          <h1 class="page-title">Déclarer une séance</h1>
-          <p class="page-subtitle" id="page-subtitle">Déclarez ici les séances que vous avez effectuées : elles comptent dans vos heures réalisées.</p>
+          <h1 class="page-title">Saisie des notes</h1>
+          <p class="page-subtitle" id="page-subtitle">Enregistrez les notes en brouillon, puis validez-les : une note validée est verrouillée et entre dans les moyennes.</p>
         </div>
-        <a class="btn-custom btn-custom-light" href="seances.html"><i class="bi bi-clock-history"></i> Mon historique</a>
       </div>
 
-      <div class="row g-4">
-        <div class="col-lg-7">
-          <div class="card">
-            <div class="card-header"><h3 class="card-title">Nouvelle séance</h3></div>
-            <div id="form-host">
-              <div class="empty-state" aria-busy="true"><div class="spinner-border spinner-border-sm" role="status"></div><p>Chargement…</p></div>
-            </div>
+      <div class="table-card-custom filter-bar" id="controls" hidden>
+        <div class="table-header-control">
+          <div class="filter-bar-group filter-bar-grow">
+            <label for="select-subject" class="form-label-custom">Matière</label>
+            <select class="form-select-custom" id="select-subject"></select>
+          </div>
+          <div class="filter-bar-group">
+            <span class="form-label-custom" id="type-label">Évaluation</span>
+            <div class="segmented" role="group" aria-labelledby="type-label" id="type-buttons"></div>
           </div>
         </div>
-        <div class="col-lg-5">
-          <div class="card">
-            <div class="card-header"><h3 class="card-title">Mon bilan du semestre</h3></div>
-            <div id="balance"></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h3 class="card-title">Mes dernières séances</h3></div>
-            <div id="recent"></div>
-          </div>
-        </div>
+      </div>
+
+      <div id="content">
+        <div class="empty-state" aria-busy="true"><div class="spinner-border spinner-border-sm" role="status"></div><p>Chargement…</p></div>
       </div>
     </main>
   </div>
 
   <script src="../../assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script type="module" src="../../assets/js/pages/enseignant-declarer-seance.js"></script>
+  <script type="module" src="../../assets/js/pages/chef-saisie-notes.js"></script>
 </body>
 </html>

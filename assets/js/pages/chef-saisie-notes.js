@@ -1,5 +1,5 @@
 /*
- * Enseignant : saisie et validation des notes d'une de ses matières.
+ * Chef : saisie et validation des notes d'une matière (le chef saisit pour l'enseignant de la matière).
  *
  * Parcours : choisir la matière et l'évaluation (contrôle continu / examen / rattrapage), saisir les notes,
  * « Enregistrer le brouillon » (modifiable, non comptée), puis « Valider » (verrouillage, prise en compte dans
@@ -9,7 +9,7 @@
 
 
 import { initPage } from '../layout.js';
-import { GRADE_TYPES, GradeService, SubjectService, ValidationError } from '../services/index.js';
+import { GRADE_TYPES, GradeService, ReferenceService, SubjectService, ValidationError } from '../services/index.js';
 import { confirmDialog, toast } from '../utils/dialogs.js';
 import { esc, formatGrade, formatNumber } from '../utils/format.js';
 import { applyDynamicWidths, emptyState, errorState, progressList, userCell } from '../utils/ui.js';
@@ -19,10 +19,10 @@ const FIELD = { CC: 'cc', EXAMEN: 'exam', RATTRAPAGE: 'rattrapage' };
 const TYPES = Object.keys(GRADE_TYPES);
 const plural = (n, one, many = `${one}s`) => (n > 1 ? many : one);
 
-const ctx = await initPage({ role: 'enseignant', page: 'grades' });
+const ctx = await initPage({ role: 'chef', page: 'grade-entry' });
 
 if (ctx) {
-    const actor = { id: ctx.user.id, role: ctx.user.role, profileId: ctx.user.profileId };
+    const actor = { id: ctx.user.id, role: ctx.user.role };
     const state = { subjectId: '', type: 'CC' };
     let subjects = [];
     let sheet = null;
@@ -80,7 +80,8 @@ if (ctx) {
     function render() {
         renderTypeButtons();
         const { subject, cls } = sheet;
-        $('page-subtitle').textContent = `${subject.name} · ${cls.label} · coef. ${subject.coefficient} · ${GRADE_TYPES[state.type]}`;
+        const teacher = sheet.teacher ? `${sheet.teacher.firstName} ${sheet.teacher.lastName}` : 'sans enseignant';
+        $('page-subtitle').textContent = `${subject.name} · ${cls.label} · ${teacher} · coef. ${subject.coefficient} · ${GRADE_TYPES[state.type]}`;
         const rows = rowsOfType();
         const showCc = state.type !== 'CC';
         const showExam = state.type === 'RATTRAPAGE';
@@ -284,16 +285,16 @@ if (ctx) {
 
     // --- Démarrage -----------------------------------------------------------------------------------
     try {
-        subjects = (await SubjectService.list({ teacherId: ctx.user.profileId })).sort((a, b) => a.code.localeCompare(b.code));
+        const [all, classes] = await Promise.all([SubjectService.list(), ReferenceService.classes()]);
+        const classById = new Map(classes.map((c) => [c.id, c]));
+        subjects = all.sort((a, b) => a.code.localeCompare(b.code));
         if (!subjects.length) {
-            $('content').innerHTML = `<div class="card">${emptyState("Aucune matière ne vous est attribuée : vous ne pouvez pas saisir de notes. Le chef de département peut vous en attribuer.", 'bi-book')}</div>`;
+            $('content').innerHTML = `<div class="card">${emptyState("Aucune matière n'est enregistrée : créez-en une pour saisir des notes.", 'bi-book')}</div>`;
         } else {
             const requested = new URLSearchParams(window.location.search).get('subject');
-            const own = subjects.find((s) => s.id === requested);
-            state.subjectId = own?.id ?? subjects[0].id;
-            $('select-subject').innerHTML = subjects.map((s) => `<option value="${esc(s.id)}"${s.id === state.subjectId ? ' selected' : ''}>${esc(s.code)} — ${esc(s.name)}</option>`).join('');
+            state.subjectId = subjects.find((s) => s.id === requested)?.id ?? subjects[0].id;
+            $('select-subject').innerHTML = subjects.map((s) => `<option value="${esc(s.id)}"${s.id === state.subjectId ? ' selected' : ''}>${esc(s.code)} — ${esc(s.name)} (${esc(classById.get(s.levelId)?.short ?? '')})</option>`).join('');
             $('controls').hidden = false;
-            if (requested && !own) toast("Cette matière ne vous est pas attribuée : vous ne pouvez saisir que les notes de vos matières.", { type: 'danger' });
             await loadSheet();
         }
     } catch (error) {
@@ -301,4 +302,3 @@ if (ctx) {
         $('content').innerHTML = errorState();
     }
 }
-

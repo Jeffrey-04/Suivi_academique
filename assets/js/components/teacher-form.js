@@ -6,7 +6,6 @@
 import { TEACHER_GRADES, TeacherService } from '../services/index.js';
 import { confirmDialog, infoDialog, openFormModal, toast } from '../utils/dialogs.js';
 import { inputField, selectField } from './fields.js';
-import { showTemporaryPassword } from './temp-password.js';
 
 /** @returns {Promise<object|null>} l'enseignant enregistré, ou null si annulé */
 export async function openTeacherForm(teacher = null) {
@@ -19,7 +18,7 @@ export async function openTeacherForm(teacher = null) {
         ${inputField({ label: 'Adresse e-mail', name: 'email', type: 'email', value: teacher?.email, required: true, placeholder: 'prenom.nom@dept-info.demo' })}
         ${inputField({ label: 'Téléphone', name: 'phone', type: 'tel', value: teacher?.phone, placeholder: '+237 6XX XX XX XX' })}
       </div>
-      <p class="stat-hint mt-3 mb-0">Le volume horaire dû sert de référence au calcul des heures supplémentaires. Un compte de connexion est créé avec l'adresse e-mail saisie.</p>`;
+      <p class="stat-hint mt-3 mb-0">Le volume horaire dû sert de référence au calcul des heures supplémentaires. L'enseignant n'a pas de compte : ses séances et ses notes sont gérées par le chef de département.</p>`;
 
     const saved = await openFormModal({
         title: teacher ? "Modifier l'enseignant" : 'Ajouter un enseignant',
@@ -32,9 +31,6 @@ export async function openTeacherForm(teacher = null) {
             return saved;
         },
     });
-    if (saved?.temporaryPassword) {
-        await showTemporaryPassword({ name: `${saved.firstName} ${saved.lastName}`, email: saved.email, password: saved.temporaryPassword, emailSent: saved.emailSent });
-    }
     return saved;
 }
 
@@ -55,7 +51,7 @@ export async function confirmDeleteTeacher(teacher, { silent = false } = {}) {
     }
     const confirmed = await confirmDialog({
         title: "Supprimer l'enseignant ?",
-        message: `${teacher.firstName} ${teacher.lastName} sera retiré de l'application, ainsi que son compte de connexion.`,
+        message: `${teacher.firstName} ${teacher.lastName} sera retiré de l'application.`,
         details: ['Cette action est définitive.'], confirmLabel: 'Supprimer', danger: true,
     });
     if (!confirmed) return false;

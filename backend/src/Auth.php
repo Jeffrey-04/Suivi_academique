@@ -48,7 +48,6 @@ class Auth
 
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['role'] = $user['role'];
-        $_SESSION['profile_id'] = $user['profileId'] ?? $user['profile_id'] ?? null;
     }
 
     public static function logout(): void
@@ -103,7 +102,6 @@ class Auth
             'id'                 => (string)$row['id'],
             'email'              => (string)$row['email'],
             'role'               => (string)$row['role'],
-            'profileId'          => $row['profile_id'] ? (string)$row['profile_id'] : null,
             'firstName'          => (string)($row['first_name'] ?? ''),
             'lastName'           => (string)($row['last_name'] ?? ''),
             'photo'              => (string)($row['photo'] ?? 'assets/images/avatar.png'),
@@ -130,16 +128,4 @@ class Auth
         }
         return $user;
     }
-
-    public static function actor(): ?array
-    {
-        $user = self::user();
-        if (!$user) return null;
-        return [
-            'id'        => $user['id'],
-            'role'      => $user['role'],
-            'profileId' => $user['profileId'],
-        ];
-    }
 }
-

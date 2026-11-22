@@ -165,10 +165,10 @@ $allSessions = $db->query("SELECT id, teacher_id, date, start_time, end_time, st
 $h005 = Calculations::hoursSummary($tea005, $allSubs, $allSessions, 'S1-2026-2027');
 
 assertVal("tea-005 planned", $h005['planned'], 225);
-assertVal("tea-005 done", $h005['done'], 221.0);
+assertVal("tea-005 done", $h005['done'], 219.0);
 assertVal("tea-005 contract", $h005['contract'], 180);
-assertVal("tea-005 overtime", $h005['overtime'], 41.0);
-assertVal("tea-005 missing", $h005['missing'], 4.0);
+assertVal("tea-005 overtime", $h005['overtime'], 39.0);
+assertVal("tea-005 missing", $h005['missing'], 6.0);
 
 // 5. Toutes les séances
 echo "\n5. Séances globales :\n";
@@ -185,12 +185,12 @@ foreach ($allSessions as $s) {
     if ($s['status'] === 'present') $doneHours += $dur;
 }
 
-assertVal("Total séances", $totalSessions, 870);
-assertVal("Séances présentes", count($presentSessions), 828);
+assertVal("Total séances", $totalSessions, 867);
+assertVal("Séances présentes", count($presentSessions), 825);
 assertVal("Séances absentes", count($absentSessions), 42);
 assertVal("Taux de présence", $rate, 95.2);
-assertVal("Heures réalisées", (int)$doneHours, 1980);
-assertVal("Heures programmées", (int)$schedHours, 2085);
+assertVal("Heures réalisées", (int)$doneHours, 1973);
+assertVal("Heures programmées", (int)$schedHours, 2078);
 
 // 6. Événements et rattrapage
 echo "\n6. Événements et rattrapage :\n";

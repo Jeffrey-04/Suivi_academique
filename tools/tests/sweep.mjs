@@ -1,4 +1,4 @@
-// Balayage de toutes les pages des 3 rôles contre l'API : console sans erreur, accessibilité de base, mobile sans défilement
+// Balayage de toutes les pages du chef de département contre l'API : console sans erreur, accessibilité de base, mobile sans défilement
 // horizontal, et page utilisable quand l'API tombe en panne (un bloc en erreur ne casse pas la page).
 // Usage : node tools/tests/sweep.mjs [normal|mobile|panne|mock|all]   (mock : mode démonstration sans serveur, ?mock=1)
 // Ancien usage :   (serveur et base lancés, voir tools/tests/README.md)
@@ -6,11 +6,9 @@ import { launch } from './cdp.mjs';
 
 const mode = process.argv[2] ?? 'all';
 const pages = {
-  chef: ['dashboard', 'etudiants', 'etudiant?id=stu-001', 'enseignants', 'enseignant?id=tea-005', 'matieres', 'notes', 'bulletins', 'bulletin?student=stu-001', 'heures', 'presences', 'calendrier', 'comptes', 'profil'],
-  enseignant: ['dashboard', 'matieres', 'saisie-notes', 'marquer-presence', 'declarer-seance', 'seances', 'calendrier', 'profil'],
-  etudiant: ['dashboard', 'notes', 'bulletin', 'calendrier', 'profil'],
+  chef: ['dashboard', 'etudiants', 'etudiant?id=stu-001', 'enseignants', 'enseignant?id=tea-005', 'matieres', 'saisie-notes', 'saisie-notes?subject=sub-043&type=EXAMEN', 'notes', 'bulletins', 'bulletin?student=stu-001', 'emploi-du-temps', 'presences', 'heures', 'calendrier', 'profil'],
 };
-const accounts = { chef: 'chef@dept-info.demo', enseignant: 'herve.kamga@dept-info.demo', etudiant: 'ulrich.foning@etu.dept-info.demo' };
+const accounts = { chef: 'chef@dept-info.demo' };
 const A11Y = `(() => {
   const issues = [];
   const name = (e) => (e.getAttribute('aria-label') || e.getAttribute('aria-labelledby') || e.textContent.trim() || e.getAttribute('title') || e.querySelector('img[alt]:not([alt=""])')?.alt || '');

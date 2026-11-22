@@ -46,8 +46,8 @@
    29. Calendrier (grille mensuelle, agenda, fiche d'événement)
    30. Tableaux de bord : finitions (listes cliquables, tableaux compacts)
    31. Recherche rapide et fiche de profil
-   32. Comptes et réglages (pages de profil, gestion des comptes)
-   33. Présence géolocalisée
+   32. Profil et réglages (page de profil du chef)
+   33. Emploi du temps (grille hebdomadaire, créneaux, statuts des séances)
 --------------------------------------------------------------------- */
 
 /* ---------------------------------------------------------------------
@@ -4936,7 +4936,7 @@ button.table-btn-action {
 }
 
 /* ---------------------------------------------------------------------
-   32. Comptes et réglages (pages de profil, gestion des comptes)
+   32. Profil et réglages (page de profil du chef)
 --------------------------------------------------------------------- */
 .profile-head-lg {
     flex-direction: column;
@@ -4952,27 +4952,8 @@ button.table-btn-action {
     border: 4px solid var(--border-light);
 }
 
-.profile-link-card {
-    color: inherit;
-    text-decoration: none;
-    transition: box-shadow 0.2s ease-in-out;
-}
 
-.profile-link-card:hover {
-    box-shadow: var(--shadow-md);
-}
 
-.profile-link-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: var(--radius-md);
-    background-color: var(--brand-lime-translucent);
-    color: var(--brand-forest-medium);
-    font-size: 1.15rem;
-}
 
 .settings-title {
     padding-bottom: 0.35rem;
@@ -4984,20 +4965,6 @@ button.table-btn-action {
     text-transform: uppercase;
 }
 
-.temp-password {
-    display: block;
-    margin: 1rem 0;
-    padding: 0.85rem 1rem;
-    border: 1px dashed var(--brand-forest-medium);
-    border-radius: var(--radius-md);
-    background-color: var(--bs-body-bg);
-    color: var(--text-main);
-    font-size: 1.35rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-align: center;
-    user-select: all;
-}
 
 /* Identité en colonne étroite : libellé au-dessus de la valeur (les e-mails longs passent à la ligne proprement) */
 .profile-list-stacked .profile-row {
@@ -5034,54 +5001,136 @@ button.table-btn-action {
 }
 
 /* ---------------------------------------------------------------------
-   33. Présence géolocalisée
+   33. Emploi du temps (grille hebdomadaire, créneaux, statuts des séances)
 --------------------------------------------------------------------- */
-.campus-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: var(--radius-md);
-    background-color: var(--brand-lime-translucent);
-    color: var(--brand-forest-medium);
-    font-size: 1.15rem;
-}
-
-.demo-note {
-    padding: 0.65rem 0.9rem;
-    border-radius: var(--radius-md);
-    background-color: var(--sys-orange-bg);
-    color: #9A3412;
-    font-size: 0.85rem;
-}
-
-.checkin-button {
-    width: 100%;
-    justify-content: center;
-    padding-block: 0.9rem;
-    font-size: 1rem;
-}
-
-.checkin-success {
+.tt-toolbar {
     display: flex;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.75rem;
-    margin-top: 1.25rem;
-    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.tt-week-label {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.tt-week {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.tt-day {
+    min-width: 0;
+    padding: 0.75rem;
+    border: 1px solid var(--border-light);
     border-radius: var(--radius-md);
-    background-color: var(--sys-green-bg);
-    color: #166534;
+    background-color: #fff;
 }
 
-.checkin-success > i {
-    margin-top: 0.1rem;
-    font-size: 1.25rem;
+.tt-day.is-today {
+    border-color: var(--brand-forest-main);
+    box-shadow: 0 0 0 1px var(--brand-forest-main);
 }
 
-.checkin-success .stat-hint {
-    color: inherit;
-    opacity: 0.85;
+.tt-day-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-light);
+    font-weight: 700;
+    color: var(--text-main);
 }
 
+.tt-day-date {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted-green);
+}
+
+.tt-day-empty {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted-green);
+}
+
+.tt-slot {
+    display: block;
+    width: 100%;
+    margin-bottom: 0.5rem;
+    padding: 0.55rem 0.65rem;
+    border: 0;
+    border-left: 4px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background-color: #F5F7F6;
+    color: var(--text-main);
+    text-align: left;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease;
+}
+
+.tt-slot:hover,
+.tt-slot:focus-visible {
+    box-shadow: var(--shadow-sm);
+    outline: 2px solid var(--brand-forest-main);
+    outline-offset: 1px;
+}
+
+.tt-slot-time {
+    display: block;
+    font-weight: 700;
+}
+
+.tt-slot-title {
+    display: block;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.tt-slot-meta {
+    display: block;
+    color: var(--text-muted-green);
+    overflow-wrap: anywhere;
+}
+
+.tt-slot-state {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.tt-slot.tt-toConfirm { border-left-color: var(--sys-orange); background-color: var(--sys-orange-bg); }
+.tt-slot.tt-done { border-left-color: var(--sys-green); background-color: var(--sys-green-bg); }
+.tt-slot.tt-absent { border-left-color: var(--sys-red); background-color: var(--sys-red-bg); }
+.tt-slot.tt-cancelled { opacity: 0.65; text-decoration: line-through; }
+.tt-slot.tt-cancelled .tt-slot-state { text-decoration: none; }
+
+.tt-detail dt {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted-green);
+}
+
+.tt-detail dd {
+    margin-bottom: 0.6rem;
+    color: var(--text-main);
+}
+
+@media (max-width: 1199.98px) {
+    .tt-week { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 767.98px) {
+    .tt-week { grid-template-columns: minmax(0, 1fr); }
+}

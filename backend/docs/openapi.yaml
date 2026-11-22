@@ -5,10 +5,13 @@ info:
   description: |
     API REST PHP de l'application Suivi Académique.
 
+    **Un seul utilisateur : le chef de département.** Les enseignants et les
+    étudiants sont des fiches gérées par le chef, sans compte ni connexion.
+
     Les routes privées utilisent une session PHP transmise par cookie
     `SUIVI_SESSID`. Connectez-vous sur `POST /auth/login` avant d'appeler les
-    routes privées. Les permissions de rôle et de périmètre sont vérifiées par
-    le backend.
+    routes privées (toutes réservées au chef) ; seules `/config` et la connexion
+    sont publiques.
   contact:
     name: TYITYI Liano — Backend
     url: https://github.com/Liano-T
@@ -35,9 +38,9 @@ tags:
   - name: Notes
   - name: Bulletins
   - name: Séances et heures
-  - name: Présences
+  - name: Emploi du temps
   - name: Calendrier et notifications
-  - name: Comptes et profil
+  - name: Compte du chef
   - name: Statistiques
 paths:
   /config:
@@ -142,7 +145,7 @@ paths:
   /students:
     get:
       tags: [Étudiants]
-      summary: Lister les étudiants visibles par le rôle courant
+      summary: Lister les étudiants
       parameters:
         - { $ref: "#/components/parameters/FiliereIdQuery" }
         - { $ref: "#/components/parameters/LevelIdQuery" }
@@ -153,20 +156,10 @@ paths:
     post:
       tags: [Étudiants]
       summary: Créer un étudiant (chef)
-      description: Le backend valide les champs et génère le matricule ainsi que le compte associé.
+      description: Le backend valide les champs et génère le matricule. L'étudiant n'a pas de compte de connexion.
       requestBody: { $ref: "#/components/requestBodies/JsonObject" }
       responses:
-        "201":
-          description: "Étudiant créé : champs habituels de la fiche, plus `temporaryPassword` (affiché une seule fois) et `emailSent`."
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-                properties:
-                  id: { type: string }
-                  temporaryPassword: { type: string, description: "Affiché une seule fois" }
-                  emailSent: { type: boolean }
+        "201": { $ref: "#/components/responses/JsonObject" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -213,7 +206,7 @@ paths:
   /teachers:
     get:
       tags: [Enseignants]
-      summary: Lister les enseignants visibles par le rôle courant
+      summary: Lister les enseignants
       responses:
         "200": { $ref: "#/components/responses/JsonArray" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -222,17 +215,7 @@ paths:
       summary: Créer un enseignant (chef)
       requestBody: { $ref: "#/components/requestBodies/JsonObject" }
       responses:
-        "201":
-          description: "Enseignant créé : champs habituels de la fiche, plus `temporaryPassword` (affiché une seule fois) et `emailSent`."
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-                properties:
-                  id: { type: string }
-                  temporaryPassword: { type: string, description: "Affiché une seule fois" }
-                  emailSent: { type: boolean }
+        "201": { $ref: "#/components/responses/JsonObject" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -567,55 +550,141 @@ paths:
         "200": { $ref: "#/components/responses/JsonArray" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
-  /institution/location:
+  /timetable/slots:
     get:
-      tags: [Présences]
-      summary: Lire les coordonnées de l'établissement
-      responses:
-        "200":
-          description: Localisation et rayon autorisé.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  name: { type: string }
-                  lat: { type: number }
-                  lng: { type: number }
-                  radiusMeters: { type: integer }
-                  maxAccuracy: { type: integer }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-  /checkins:
-    get:
-      tags: [Présences]
-      summary: Lister les pointages accessibles
+      tags: [Emploi du temps]
+      summary: Lister les créneaux hebdomadaires
+      description: Chaque créneau est rattaché à une matière, qui fixe l'enseignant, la classe et le semestre.
       parameters:
         - { name: teacherId, in: query, schema: { type: string } }
-        - { name: from, in: query, schema: { type: string, format: date } }
-        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: levelId, in: query, schema: { type: string } }
+        - { name: subjectId, in: query, schema: { type: string } }
       responses:
-        "200": { $ref: "#/components/responses/JsonArray" }
+        "200":
+          description: Créneaux triés par jour puis heure.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/TimetableSlot" } }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
-      tags: [Présences]
-      summary: Pointer sa présence (enseignant)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [subjectId, lat, lng, accuracy]
-              properties:
-                subjectId: { type: string, example: sub-001 }
-                lat: { type: number, example: 3.8667 }
-                lng: { type: number, example: 11.5167 }
-                accuracy: { type: number, description: Précision GPS en mètres., example: 20 }
+      tags: [Emploi du temps]
+      summary: Créer un créneau
+      description: >
+        Champs : `subjectId`, `weekday` (1 = lundi … 6 = samedi), `startTime`, `endTime` (HH:MM, 30 min à 8 h), `room` (facultatif),
+        `validFrom`, `validUntil` (dans l'année universitaire). Refusé (422) si l'enseignant, la classe ou la salle ont déjà un créneau
+        qui se chevauche le même jour sur la période commune ; le message est porté par le champ `startTime` ou `room`.
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201":
+          description: Créneau créé.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimetableSlot" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /timetable/slots/{id}:
+    get:
+      tags: [Emploi du temps]
+      summary: Lire un créneau
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Le créneau.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimetableSlot" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Emploi du temps]
+      summary: Modifier un créneau
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "200":
+          description: Créneau modifié.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimetableSlot" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [Emploi du temps]
+      summary: Supprimer un créneau
+      description: Ses annulations sont supprimées avec lui ; les séances déjà enregistrées sont conservées.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204": { description: Créneau supprimé. }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /timetable/occurrences:
+    get:
+      tags: [Emploi du temps]
+      summary: Occurrences datées des créneaux, avec leur statut
+      description: >
+        Statut : `done` / `absent` (une séance de la même matière, le même jour, sur une plage qui chevauche le créneau),
+        `cancelled` (annulée, sauf séance enregistrée), `upcoming` (date postérieure à aujourd'hui), `toConfirm` (date passée ou du jour,
+        rien d'enregistré). Sans `from` ni `to` : la semaine en cours. Période de 370 jours au plus.
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: teacherId, in: query, schema: { type: string } }
+        - { name: levelId, in: query, schema: { type: string } }
+        - { name: subjectId, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [upcoming, toConfirm, done, absent, cancelled] } }
+      responses:
+        "200":
+          description: Occurrences triées par date puis heure.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Occurrence" } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /timetable/occurrences/confirm:
+    post:
+      tags: [Emploi du temps]
+      summary: Confirmer qu'une séance prévue a eu lieu
+      description: >
+        Corps : `slotId`, `date`, `note` (facultatif). Crée la séance « présent » avec les horaires du créneau, avec les mêmes contrôles que
+        `POST /sessions` (pas de séance dans le futur, pas de chevauchement…). Renvoie la séance créée.
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
       responses:
         "201": { $ref: "#/components/responses/JsonObject" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
+  /timetable/occurrences/absence:
+    post:
+      tags: [Emploi du temps]
+      summary: Déclarer l'absence de l'enseignant à une séance prévue
+      description: "Corps : `slotId`, `date`, `note` (motif, facultatif). Crée la séance « absent ». Renvoie la séance créée."
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /timetable/occurrences/cancel:
+    post:
+      tags: [Emploi du temps]
+      summary: Annuler une occurrence (jour férié, salle indisponible…)
+      description: "Corps : `slotId`, `date`, `reason` (facultatif, 120 caractères). Aucune séance ni absence n'est comptée. Refusé si une séance est déjà enregistrée."
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "201": { $ref: "#/components/responses/JsonObject" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /timetable/occurrences/restore:
+    post:
+      tags: [Emploi du temps]
+      summary: Rétablir une occurrence annulée
+      description: "Corps : `slotId`, `date`."
+      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
+      responses:
+        "204": { description: Occurrence rétablie. }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /events:
     get:
       tags: [Calendrier et notifications]
@@ -717,14 +786,14 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
   /me/profile:
     get:
-      tags: [Comptes et profil]
+      tags: [Compte du chef]
       summary: Lire le profil et les réglages de l'utilisateur
       responses:
         "200": { $ref: "#/components/responses/JsonObject" }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /me/contact:
     patch:
-      tags: [Comptes et profil]
+      tags: [Compte du chef]
       summary: Modifier les coordonnées
       requestBody: { $ref: "#/components/requestBodies/JsonObject" }
       responses:
@@ -733,7 +802,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
   /me/photo:
     put:
-      tags: [Comptes et profil]
+      tags: [Compte du chef]
       summary: Modifier la photo de profil
       description: Accepte une image PNG, JPEG ou WebP encodée en data URL, de 200 Ko maximum.
       requestBody:
@@ -750,7 +819,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
   /me/password:
     put:
-      tags: [Comptes et profil]
+      tags: [Compte du chef]
       summary: Changer le mot de passe
       requestBody: { $ref: "#/components/requestBodies/JsonObject" }
       responses:
@@ -759,57 +828,13 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
   /me/settings:
     put:
-      tags: [Comptes et profil]
+      tags: [Compte du chef]
       summary: Enregistrer les préférences utilisateur
       requestBody: { $ref: "#/components/requestBodies/JsonObject" }
       responses:
         "200": { $ref: "#/components/responses/JsonObject" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-  /accounts:
-    get:
-      tags: [Comptes et profil]
-      summary: Lister les comptes (chef)
-      responses:
-        "200": { $ref: "#/components/responses/JsonArray" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-  /accounts/{id}:
-    patch:
-      tags: [Comptes et profil]
-      summary: Activer ou désactiver un compte (chef)
-      parameters:
-        - { $ref: "#/components/parameters/Id" }
-      requestBody: { $ref: "#/components/requestBodies/JsonObject" }
-      responses:
-        "200": { $ref: "#/components/responses/JsonObject" }
-        "422": { $ref: "#/components/responses/ValidationError" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /accounts/{id}/reset-password:
-    post:
-      tags: [Comptes et profil]
-      summary: Réinitialiser le mot de passe d'un compte (chef)
-      description: >
-        Génère un mot de passe **temporaire aléatoire** (11 caractères), pose `mustChangePassword` et le renvoie **une seule fois**
-        (`temporaryPassword`). Il est aussi envoyé par e-mail si le service est configuré (`emailSent`). Jamais pour son propre compte.
-      parameters:
-        - { $ref: "#/components/parameters/Id" }
-      responses:
-        "200":
-          description: Mot de passe temporaire.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user: { $ref: "#/components/schemas/User" }
-                  temporaryPassword: { type: string, example: "kP9xQ2mWnB7" }
-                  emailSent: { type: boolean }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
   /stats/teaching-weekly:
     get:
       tags: [Statistiques]
@@ -979,14 +1004,43 @@ components:
       properties:
         id: { type: string, example: usr-chef }
         email: { type: string, format: email }
-        role: { type: string, enum: [chef, enseignant, etudiant] }
-        profileId: { type: string, nullable: true }
+        role: { type: string, enum: [chef] }
         firstName: { type: string }
         lastName: { type: string }
         photo: { type: string }
         active: { type: boolean }
         mustChangePassword: { type: boolean }
         settings: { type: object, nullable: true, additionalProperties: true }
+    TimetableSlot:
+      type: object
+      properties:
+        id: { type: string, example: slt-001 }
+        subjectId: { type: string }
+        teacherId: { type: string, description: Enseignant de la matière (en lecture seule). }
+        levelId: { type: string, description: Classe de la matière (en lecture seule). }
+        semester: { type: string, enum: [S1, S2] }
+        weekday: { type: integer, minimum: 1, maximum: 6, description: 1 = lundi … 6 = samedi }
+        startTime: { type: string, example: "08:00" }
+        endTime: { type: string, example: "10:00" }
+        room: { type: string, nullable: true }
+        validFrom: { type: string, format: date }
+        validUntil: { type: string, format: date }
+    Occurrence:
+      type: object
+      properties:
+        id: { type: string, example: "slt-001@2027-01-06" }
+        slotId: { type: string }
+        date: { type: string, format: date }
+        weekday: { type: integer }
+        startTime: { type: string }
+        endTime: { type: string }
+        room: { type: string, nullable: true }
+        subjectId: { type: string }
+        teacherId: { type: string }
+        levelId: { type: string }
+        status: { type: string, enum: [upcoming, toConfirm, done, absent, cancelled] }
+        sessionId: { type: string, nullable: true }
+        reason: { type: string, nullable: true, description: Motif de l'annulation. }
     Error:
       type: object
       required: [message]

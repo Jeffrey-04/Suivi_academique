@@ -1,15 +1,14 @@
 /*
- * Page « Calendrier » commune aux trois rôles (le balisage des trois calendrier.html est identique).
- *  - tous les rôles consultent : grille du mois ou agenda, filtre par type, fiche détaillée, export (Excel, CSV, .ics) ;
- *  - le chef crée, modifie et supprime (EventService contrôle les droits : l'interface ne fait que masquer les boutons) ;
- *  - chacun ne voit que les événements dont l'audience inclut son rôle (le chef voit tout).
- * Paramètres d'URL : ?event=ID ouvre la fiche (lien des notifications), ?new=1 ouvre la création (chef).
+ * Page « Calendrier » du chef de département (seul utilisateur) :
+ *  - grille du mois ou agenda, filtre par type, fiche détaillée, export (Excel, CSV, .ics) ;
+ *  - création, modification et suppression des événements (EventService contrôle les droits).
+ * Paramètres d'URL : ?event=ID ouvre la fiche (lien des notifications), ?new=1 ouvre la création.
  */
 
 import { config } from '../config.js';
 import { EventService, academicYearBounds, resolveSettings } from '../services/index.js';
 import { monthKey } from '../utils/calendar-grid.js';
-import { AUDIENCES, EVENT_TYPES, eventType } from '../utils/event-types.js';
+import { EVENT_TYPES, eventType } from '../utils/event-types.js';
 import { openModal, toast } from '../utils/dialogs.js';
 import { downloadBlob, describeFilters, exportInfo } from '../utils/exporter.js';
 import { formatDateLong, formatNumber, todayISO } from '../utils/format.js';
@@ -29,7 +28,7 @@ const monthOf = (iso) => ({ year: Number(iso.slice(0, 4)), month: Number(iso.sli
 
 export async function mountCalendarPage(ctx) {
     const { user } = ctx;
-    const actor = { id: user.id, role: user.role, profileId: user.profileId };
+    const actor = { id: user.id, role: user.role };
     const isChef = user.role === 'chef';
     const bounds = academicYearBounds();
     const now = monthOf(todayISO());
@@ -74,7 +73,7 @@ export async function mountCalendarPage(ctx) {
     async function load() {
         await renderInto(
             $('calendar-body'),
-            () => EventService.list({ role: isChef ? undefined : user.role }),
+            () => EventService.list(),
             (events) => { state.events = events; return ''; },
         );
         subtitle();
@@ -150,7 +149,6 @@ export async function mountCalendarPage(ctx) {
         getSpec() {
             const rows = visible();
             if (!rows.length) return null;
-            const audienceLabel = (e) => e.audience.map((r) => AUDIENCES[r] ?? r).join(', ');
             return {
                 filename: 'calendrier',
                 sheets: [{
@@ -163,11 +161,11 @@ export async function mountCalendarPage(ctx) {
                     columns: [
                         { header: 'Début', type: 'date', width: 13 }, { header: 'Fin', type: 'date', width: 13 },
                         { header: 'Horaire', width: 14, align: 'center' }, { header: 'Type', width: 20 }, { header: 'Titre', width: 44 },
-                        { header: 'Lieu', width: 22 }, { header: 'Destinataires', width: 32 }, { header: 'Description', width: 50 },
+                        { header: 'Lieu', width: 22 }, { header: 'Description', width: 50 },
                     ],
                     rows: rows.map((e) => [
                         e.start, e.end ?? '', e.startTime ? `${e.startTime}${e.endTime ? ` – ${e.endTime}` : ''}` : '',
-                        eventType(e.type).label, e.title, e.location ?? '', audienceLabel(e), e.description ?? '',
+                        eventType(e.type).label, e.title, e.location ?? '', e.description ?? '',
                     ]),
                 }],
             };

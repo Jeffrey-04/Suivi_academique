@@ -43,7 +43,7 @@ class AuthController
         }
 
         if ((int)$user['active'] !== 1) {
-            Response::validationError('Ce compte est désactivé. Contactez le chef de département.');
+            Response::validationError('Ce compte est désactivé.');
         }
 
         RateLimiter::clear($db, $email);

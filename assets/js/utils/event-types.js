@@ -13,6 +13,3 @@ export const EVENT_TYPES = {
 };
 
 export const eventType = (type) => EVENT_TYPES[type] ?? EVENT_TYPES.autre;
-
-/** Destinataires possibles d'un événement. */
-export const AUDIENCES = { chef: 'Chef de département', enseignant: 'Enseignants', etudiant: 'Étudiants' };

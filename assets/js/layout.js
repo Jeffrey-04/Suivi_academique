@@ -18,7 +18,7 @@ import { eventType, TONE_BG, errorState } from './utils/ui.js';
 import { showQueuedToasts } from './utils/dialogs.js';
 import { mountGlobalSearch } from './components/global-search.js';
 
-const SEARCH_PLACEHOLDER = { chef: 'Rechercher un étudiant, une matière…', enseignant: 'Rechercher une matière, un événement…', etudiant: 'Rechercher un événement…' };
+const SEARCH_PLACEHOLDER = { chef: 'Rechercher un étudiant, un enseignant, une matière…' };
 
 const hrefOf = (item) => (item.soon ? '#' : url(item.href));
 
@@ -270,7 +270,7 @@ function bindLayout({ user }) {
 /**
  * À appeler en tête du script de chaque page protégée.
  * Retourne { user, role } une fois le layout affiché, ou null si une redirection est en cours.
- * @param {{ role: 'chef'|'enseignant'|'etudiant', page: string }} options page = id de l'entrée de menu active
+ * @param {{ role: 'chef', page: string }} options page = id de l'entrée de menu active
  */
 export async function initPage({ role, page }) {
     const wrapper = document.querySelector('.main-wrapper');

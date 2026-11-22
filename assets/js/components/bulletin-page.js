@@ -1,5 +1,5 @@
 /*
- * Page d'un bulletin, commune au chef (?student=…) et à l'étudiant (le sien).
+ * Page du bulletin d'un étudiant (?student=…), pour le chef de département.
  * Affiche la feuille du bulletin, ou l'état du relevé tant qu'il n'est pas généré ; télécharge le PDF ; imprime.
  * Page attendue : #page-title, #page-subtitle, #page-actions (#btn-print, #btn-pdf, #btn-generate facultatif),
  * #banner, #content.
@@ -16,10 +16,9 @@ import { mountBulletinSheet } from './bulletin-view.js';
 const $ = (id) => document.getElementById(id);
 
 /**
- * @param {{ studentId: string|null, mode: 'chef'|'etudiant', actor: object, listUrl?: string }} options
+ * @param {{ studentId: string|null, actor: object, listUrl?: string }} options
  */
-export async function initBulletinPage({ studentId, mode, actor, listUrl }) {
-    const isChef = mode === 'chef';
+export async function initBulletinPage({ studentId, actor, listUrl }) {
     let detail = null;
     let stopFit = null;
 
@@ -37,20 +36,15 @@ export async function initBulletinPage({ studentId, mode, actor, listUrl }) {
     function renderState() {
         $('page-actions').hidden = true;
         $('banner').innerHTML = '';
-        const gradesUrl = `${url('pages/chef/notes.html')}`;
+        const entryUrl = url('pages/chef/saisie-notes.html');
         let body;
         if (detail.status === 'ready') {
-            body = isChef
-                ? `${emptyState('Le relevé est complet : toutes les moyennes sont calculées. Le bulletin peut être généré ; il deviendra alors visible par l\'étudiant.', 'bi-file-earmark-plus')}
-                   <div class="text-center pb-2"><button type="button" class="btn-custom btn-custom-primary" id="btn-generate-inline"><i class="bi bi-file-earmark-plus"></i> Générer le bulletin</button></div>`
-                : emptyState('Votre relevé est complet. Le département publiera votre bulletin prochainement : il apparaîtra ici dès sa génération.', 'bi-hourglass-split');
+            body = `${emptyState('Le relevé est complet : toutes les moyennes sont calculées. Le bulletin peut être généré.', 'bi-file-earmark-plus')}
+                   <div class="text-center pb-2"><button type="button" class="btn-custom btn-custom-primary" id="btn-generate-inline"><i class="bi bi-file-earmark-plus"></i> Générer le bulletin</button></div>`;
         } else {
-            body = isChef
-                ? `${emptyState('Relevé incomplet : le bulletin ne peut pas être généré tant que toutes les matières n\'ont pas de moyenne.', 'bi-hourglass-split')}
+            body = `${emptyState('Relevé incomplet : le bulletin ne peut pas être généré tant que toutes les matières n\'ont pas de moyenne.', 'bi-hourglass-split')}
                    <div class="px-4 pb-3"><span class="form-label-custom">Matières sans moyenne</span>${missingList()}</div>
-                   <div class="text-center pb-2"><a class="btn-custom btn-custom-light" href="${esc(gradesUrl)}?subject=${esc(detail.report.lines.find((l) => l.average === null)?.subjectId ?? '')}"><i class="bi bi-eye"></i> Consulter les notes</a></div>`
-                : `${emptyState('Votre bulletin n\'est pas encore disponible : certaines matières n\'ont pas encore de note validée.', 'bi-hourglass-split')}
-                   <div class="px-4 pb-3"><span class="form-label-custom">Matières concernées</span>${missingList()}</div>`;
+                   <div class="text-center pb-2"><a class="btn-custom btn-custom-primary" href="${esc(entryUrl)}?subject=${esc(detail.report.lines.find((l) => l.average === null)?.subjectId ?? '')}"><i class="bi bi-pencil-square"></i> Saisir les notes</a></div>`;
         }
         $('content').innerHTML = `<div class="card">${body}</div>`;
         $('btn-generate-inline')?.addEventListener('click', generate);
@@ -60,10 +54,10 @@ export async function initBulletinPage({ studentId, mode, actor, listUrl }) {
         const doc = detail.document;
         $('page-actions').hidden = false;
         if ($('btn-generate')) {
-            $('btn-generate').hidden = !(isChef && detail.status === 'outdated');
+            $('btn-generate').hidden = detail.status !== 'outdated';
         }
-        $('banner').innerHTML = isChef && detail.status === 'outdated'
-            ? `<div class="info-banner is-warning"><i class="bi bi-exclamation-triangle"></i> Des notes ont changé depuis la génération du ${esc(formatDate(doc.generatedAt))} : ce bulletin n'est plus à jour. Régénérez-le pour publier la nouvelle version.</div>`
+        $('banner').innerHTML = detail.status === 'outdated'
+            ? `<div class="info-banner is-warning"><i class="bi bi-exclamation-triangle"></i> Des notes ont changé depuis la génération du ${esc(formatDate(doc.generatedAt))} : ce bulletin n'est plus à jour. Régénérez-le pour mettre à jour la nouvelle version.</div>`
             : '';
         stopFit?.();
         stopFit = mountBulletinSheet($('content'), doc);
@@ -81,8 +75,8 @@ export async function initBulletinPage({ studentId, mode, actor, listUrl }) {
                 return;
             }
             const name = fullName(detail.student);
-            document.title = `${isChef ? `Bulletin de ${name}` : 'Mon bulletin'} - Suivi Académique`;
-            $('page-title').textContent = isChef ? `Bulletin de ${name}` : 'Mon bulletin';
+            document.title = `Bulletin de ${name} - Suivi Académique`;
+            $('page-title').textContent = `Bulletin de ${name}`;
             $('page-subtitle').textContent = `${detail.cls.label} · semestre ${config.CURRENT_SEMESTER} ${config.ACADEMIC_YEAR}`;
             if (detail.document) renderDocument(); else renderState();
         } catch (error) {

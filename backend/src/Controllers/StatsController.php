@@ -20,11 +20,8 @@ class StatsController
 
     public function teachingWeekly(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $teacherId = $query['teacherId'] ?? null;
-        if ($user['role'] === 'enseignant') {
-            $teacherId = $user['profileId'];
-        }
 
         $db = Database::getConnection();
         $sql = 'SELECT id, teacher_id, date, start_time, end_time, status FROM sessions WHERE 1=1';
@@ -550,11 +547,8 @@ class StatsController
 
     public function teacherRecentSessions(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $teacherId = $params['id'];
-        if ($user['role'] === 'enseignant' && $user['profileId'] !== $teacherId) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $db = Database::getConnection();
         $limit = !empty($query['limit']) ? (int)$query['limit'] : 5;
@@ -605,11 +599,8 @@ class StatsController
 
     public function teacherOverview(array $params): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $teacherId = $params['id'];
-        if ($user['role'] === 'enseignant' && $user['profileId'] !== $teacherId) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $db = Database::getConnection();
 
@@ -702,11 +693,8 @@ class StatsController
 
     public function studentOverview(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'etudiant');
+        Auth::requireRole('chef');
         $studentId = $params['id'];
-        if ($user['role'] === 'etudiant' && $user['profileId'] !== $studentId) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $config = require __DIR__ . '/../../config/config.php';
         $semester = $query['semester'] ?? $config['current_semester'];

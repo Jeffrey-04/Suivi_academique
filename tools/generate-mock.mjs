@@ -224,15 +224,16 @@ students.forEach((s) => {
 
 // ---- Utilisateurs -------------------------------------------------------------
 
+// Le chef de département est le SEUL compte : enseignants et étudiants sont des fiches sans connexion.
 const users = [
-    { id: 'usr-chef', email: `chef@${DOMAIN}`, password: PASSWORD, role: 'chef', profileId: null, firstName: 'Gaston', lastName: 'Nzogang', photo: 'assets/images/avatar.png', demo: true, active: true, mustChangePassword: false },
-    ...teachers.map((t) => ({ id: `usr-${t.id}`, email: t.email, password: PASSWORD, role: 'enseignant', profileId: t.id, firstName: t.firstName, lastName: t.lastName, photo: t.photo, demo: t.id === 'tea-005', active: true, mustChangePassword: false })),
-    ...students.map((s) => ({ id: `usr-${s.id}`, email: s.email, password: PASSWORD, role: 'etudiant', profileId: s.id, firstName: s.firstName, lastName: s.lastName, photo: s.photo, demo: false, active: true, mustChangePassword: false })),
+    { id: 'usr-chef', email: `chef@${DOMAIN}`, password: PASSWORD, role: 'chef', firstName: 'Gaston', lastName: 'Nzogang', photo: 'assets/images/avatar.png', demo: true, active: true, mustChangePassword: false },
 ];
+// Nombre de comptes de l'ancienne version (chef + enseignants + étudiants) : sert à garder le même nombre de tirages aléatoires,
+// donc les mêmes séances et notes générées ensuite.
+const LEGACY_USER_COUNT = 1 + teachers.length + students.length;
 
 // ---- Événements ---------------------------------------------------------------
 
-const ALL = ['chef', 'enseignant', 'etudiant'];
 const eventDefs = [
     ['autre', 'Rentrée académique 2026-2027', '2026-09-14', null, 'Amphi A', null, null, '2026-09-01'],
     ['reunion', 'Réunion pédagogique de mi-semestre', '2026-11-04', null, 'Salle des profs', '15:00', '17:00', '2026-10-20'],
@@ -254,30 +255,29 @@ const events = eventDefs.map(([type, title, start, end, location, startTime, end
     id: `evt-${pad(i + 1, 3)}`,
     type, title, start, end, startTime, endTime, location,
     description: null,
-    audience: type === 'reunion' ? ['chef', 'enseignant'] : ALL, // les réunions concernent le personnel ; le reste, tout le monde
     createdBy: 'usr-chef',
     createdAt,
 }));
 
-// Notifications : événements proches (de -5 j à +20 j autour d'aujourd'hui), pour tous les utilisateurs
+// Notifications (rappels) : événements proches (de -5 j à +20 j autour d'aujourd'hui), pour le chef
 const notifications = [];
 const notifEvents = events.filter((e) => e.start >= dateAdd(TODAY, -5) && e.start <= dateAdd(TODAY, 20));
 notifEvents.forEach((e) => {
-    users.forEach((u) => {
+    for (let u = 0; u < LEGACY_USER_COUNT; u++) {
         const isPast = e.start < TODAY;
-        // Tirage fait pour tous les utilisateurs (même hors audience) : le flux aléatoire reste identique quelle que soit
-        // l'audience des événements, donc les séances et notes générées ensuite ne changent pas.
+        // Un tirage par ancien compte (le chef est le premier) : le flux aléatoire reste identique à celui de l'ancienne version,
+        // donc les séances et notes générées ensuite ne changent pas.
         const read = isPast ? rand() < 0.8 : rand() < 0.15;
-        if (!e.audience.includes(u.role)) return;
+        if (u !== 0) continue;
         notifications.push({
             id: `ntf-${pad(notifications.length + 1, 4)}`,
-            userId: u.id,
+            userId: 'usr-chef',
             eventId: e.id,
             message: e.title,
             read,
             createdAt: `${e.createdAt}T09:00:00`,
         });
-    });
+    }
 });
 
 // ---- Séances (heures et présences) -------------------------------------------
@@ -331,25 +331,50 @@ const randSessions = mulberry32(7);
 // => les cartes « heures / absences / présences » du chef montrent une PROGRESSION.
 const absenceFactor = (weekIndex) => (weekIndex < 11 ? 1.6 : 0.25);
 const sessions = [];
+// Démonstration du contrôle : une séance de la dernière semaine n'est pas encore enregistrée pour trois enseignants en heures
+// supplémentaires (leur bilan ne change pas de catégorie) : elle apparaît « à confirmer » dans l'emploi du temps.
+const unconfirmedSubjects = new Set(['tea-005', 'tea-009', 'tea-010'].map((tid) => subjects.find((s) => s.teacherId === tid).id));
 weekStarts.forEach((ws, weekIndex) => {
     timetable.forEach(({ subject, day, slot }) => {
         const date = dateAdd(ws, day - 1);
         const teacherNo = Number(subject.teacherId.slice(4));
         const absent = randSessions() < (absenceRate[teacherNo] ?? 0.03) * absenceFactor(weekIndex);
         const reason = absenceReasons[Math.floor(randSessions() * absenceReasons.length)];
+        if (weekIndex === weekStarts.length - 1 && unconfirmedSubjects.delete(subject.id)) return; // tirages déjà faits : flux inchangé
         sessions.push({
             id: `ses-${pad(sessions.length + 1, 4)}`,
             teacherId: subject.teacherId,
             subjectId: subject.id,
             date, startTime: slot.start, endTime: slot.end,
             status: absent ? 'absent' : 'present',
-            declaredBy: absent ? 'usr-chef' : `usr-${subject.teacherId}`,
+            declaredBy: 'usr-chef',
             note: absent ? reason : null,
         });
     });
 });
 sessions.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 sessions.forEach((s, i) => { s.id = `ses-${pad(i + 1, 4)}`; });
+
+// ---- Emploi du temps (créneaux hebdomadaires) ---------------------------------------------
+// Les créneaux sont exactement la grille qui a produit les séances ci-dessus : l'emploi du temps et les séances restent cohérents.
+// Les salles sont attribuées sans conflit (aucun tirage aléatoire : les autres données ne changent pas).
+const ROOMS = ['Amphi A', 'Amphi B', 'Salle 101', 'Salle 102', 'Salle 103', 'Salle 201', 'Salle 202', 'Salle 203', 'Labo Info 1', 'Labo Info 2'];
+const SEMESTER_FIRST_DAY = '2026-09-14';
+const SEMESTER_LAST_DAY = '2027-01-08'; // la session normale commence le 11/01
+const timetableSlots = timetable.map(({ subject, day, slot }, i) => {
+    let room = null;
+    for (let k = 0; k < ROOMS.length && !room; k++) {
+        const candidate = ROOMS[(i + k) % ROOMS.length];
+        if (isFree(`room:${candidate}`, day, slot)) { take(`room:${candidate}`, day, slot); room = candidate; }
+    }
+    if (!room) throw new Error(`Aucune salle libre pour ${subject.code}`);
+    return { id: `slt-${pad(i + 1, 3)}`, subjectId: subject.id, weekday: day, startTime: slot.start, endTime: slot.end, room, validFrom: SEMESTER_FIRST_DAY, validUntil: SEMESTER_LAST_DAY };
+});
+// Vacances de fin d'année : aucun cours les deux semaines du 21/12 et du 28/12 (séances annulées, pas « à confirmer »)
+const timetableExceptions = [];
+timetableSlots.forEach((sl) => ['2026-12-21', '2026-12-28'].forEach((weekStart) => {
+    timetableExceptions.push({ slotId: sl.id, date: dateAdd(weekStart, sl.weekday - 1), reason: 'Vacances de fin d\'année' });
+}));
 
 // ---- Notes ----------------------------------------------------------------------
 
@@ -373,9 +398,9 @@ const addGrade = (student, subject, type, value, status, enteredAt, validatedAt)
         id: `grd-${pad(grades.length + 1, 4)}`,
         studentId: student.id, subjectId: subject.id, type,
         value, status,
-        enteredBy: `usr-${subject.teacherId}`,
+        enteredBy: 'usr-chef',
         enteredAt,
-        validatedBy: status === 'validee' ? `usr-${subject.teacherId}` : null,
+        validatedBy: status === 'validee' ? 'usr-chef' : null,
         validatedAt: status === 'validee' ? validatedAt : null,
     });
 };
@@ -421,26 +446,6 @@ levels.forEach((lvl) => {
 
 // Compte étudiant de démo : un étudiant ADMIS avec bulletin généré et des résultats contrastés
 // (au moins une matière sous 10 et une au-dessus), pour que les tableaux de bord montrent les deux cas.
-const mixed = (bulletin) => {
-    const lines = buildReport({ subjects: subjectsOf(students.find((s) => s.id === bulletin.studentId).levelId), grades: grades.filter((g) => g.studentId === bulletin.studentId), rattrapageOpen }).lines;
-    return lines.some((l) => l.average < 10) && lines.some((l) => l.average >= 10);
-};
-const demoBulletin = bulletins.find((b) => b.result === 'Admis' && mixed(b)) ?? bulletins.find((b) => b.result === 'Admis') ?? bulletins[0];
-users.find((u) => u.profileId === demoBulletin.studentId).demo = true;
-
-// ---- Présences géolocalisées ---------------------------------------------------------
-// Une séance « présent » sur deux des 45 derniers jours porte un repère de présence marquée à l'arrivée (déterministe, sans tirage aléatoire :
-// les autres données ne changent pas).
-const checkins = [];
-sessions.filter((s) => s.status === 'present' && s.date >= dateAdd(TODAY, -45) && s.date <= TODAY).forEach((s, i) => {
-    if (i % 2) return;
-    const minutes = mins(s.startTime) - (3 + (i % 8));
-    checkins.push({
-        id: `chk-${pad(checkins.length + 1, 4)}`, teacherId: s.teacherId, subjectId: s.subjectId, date: s.date,
-        time: `${pad(Math.floor(minutes / 60), 2)}:${pad(minutes % 60, 2)}`, distance: 15 + ((i * 37) % 220), accuracy: 8 + ((i * 13) % 40),
-    });
-});
-
 // ---- Contrôles d'intégrité ---------------------------------------------------------
 
 const ids = (arr) => new Set(arr.map((x) => x.id));
@@ -457,17 +462,16 @@ check('grade.studentId', grades.map((g) => g.studentId), ids(students));
 check('grade.subjectId', grades.map((g) => g.subjectId), ids(subjects));
 check('session.subjectId', sessions.map((s) => s.subjectId), ids(subjects));
 check('session.teacherId', sessions.map((s) => s.teacherId), ids(teachers));
-check('checkin.subjectId', checkins.map((c) => c.subjectId), ids(subjects));
-check('checkin.teacherId', checkins.map((c) => c.teacherId), ids(teachers));
+check('slot.subjectId', timetableSlots.map((t) => t.subjectId), ids(subjects));
+check('exception.slotId', timetableExceptions.map((x) => x.slotId), ids(timetableSlots));
 check('bulletin.studentId', bulletins.map((b) => b.studentId), ids(students));
 check('notification.userId', notifications.map((n) => n.userId), ids(users));
 check('notification.eventId', notifications.map((n) => n.eventId), ids(events));
-check('user.profileId', users.map((u) => u.profileId), new Set([...ids(students), ...ids(teachers)]));
 if (new Set(users.map((u) => u.email)).size !== users.length) throw new Error('E-mails utilisateurs en double');
 
 // ---- Écriture -------------------------------------------------------------------------
 
-const collections = { users, filieres, levels, units, students, teachers, subjects, grades, bulletins, sessions, checkins, events, notifications };
+const collections = { users, filieres, levels, units, students, teachers, subjects, grades, bulletins, sessions, timetableSlots, timetableExceptions, events, notifications };
 mkdirSync(OUT, { recursive: true });
 for (const [name, items] of Object.entries(collections)) {
     // un enregistrement par ligne : fichiers lisibles et diffs propres

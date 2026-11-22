@@ -45,15 +45,13 @@ export const config = {
     // c'est la date du serveur (SERVER_TODAY, reçue de GET /config : réelle en production, simulée en démonstration).
     MOCK_TODAY: '2027-01-25',
     SERVER_TODAY: null,
-    DEMO: mode === 'mock', // instance de démonstration (position simulable, comptes de démo sur la page de connexion)
+    DEMO: mode === 'mock', // instance de démonstration (compte de démo proposé sur la page de connexion)
     DEMO_ACCOUNTS: [],
 
     ACADEMIC_YEAR: '2026-2027',
     CURRENT_SEMESTER: 'S1',
     SEMESTER_START: '2026-09-14', // début des cours : borne basse des sélecteurs de période
     REMINDER_DAYS: [7, 1], // rappels automatiques : J-7 et J-1 avant le début d'un événement
-    SESSION_EDIT_DAYS: 15, // délai pendant lequel un enseignant peut corriger ou retirer une séance qu'il a déclarée
-    CHECKIN_MAX_ACCURACY: 100, // « Marquer ma présence » : précision GPS maximale acceptée, en mètres
 
     STORAGE_PREFIX: 'school:',
     SESSION_KEY: 'school:session',
@@ -68,15 +66,15 @@ export const INSTITUTION = {
     university: { fr: 'UNIVERSITÉ DE DÉMONSTRATION', en: 'DEMONSTRATION UNIVERSITY' },
     faculty: { fr: 'FACULTÉ DES SCIENCES ET TECHNIQUES', en: 'FACULTY OF SCIENCE AND TECHNOLOGY' },
     domain: { fr: 'SCIENCES ET TECHNOLOGIES', en: 'SCIENCE AND TECHNOLOGY' },
-    // Position de l'établissement et rayon dans lequel une présence peut être marquée (valeurs de démonstration : le backend les fournira)
-    location: { name: 'Campus de démonstration', lat: 3.8667, lng: 11.5167, radiusMeters: 300 },
     dean: { title: { fr: "Le Chef d'Établissement", en: 'The Dean / Director' }, name: 'Pr. Marcel Ekani' },
 };
 
+/**
+ * Un seul rôle : le chef de département, seul utilisateur de l'application. Enseignants et étudiants sont des fiches
+ * (données gérées par le chef), sans compte ni connexion.
+ */
 export const ROLES = {
     chef: { label: 'Chef de département', home: 'pages/chef/dashboard.html', profile: 'pages/chef/profil.html', icon: 'bi-person-badge' },
-    enseignant: { label: 'Enseignant', home: 'pages/enseignant/dashboard.html', profile: 'pages/enseignant/profil.html', icon: 'bi-person-workspace' },
-    etudiant: { label: 'Étudiant', home: 'pages/etudiant/dashboard.html', profile: 'pages/etudiant/profil.html', icon: 'bi-mortarboard' },
 };
 
 /** Applique la configuration du serveur (GET /config). Sans effet en mode simulé. */
@@ -92,13 +90,10 @@ export async function loadRemoteConfig() {
         Object.assign(config, {
             APP_NAME: r.appName ?? config.APP_NAME, DEPARTMENT: r.department ?? config.DEPARTMENT, ACADEMIC_YEAR: r.academicYear ?? config.ACADEMIC_YEAR,
             CURRENT_SEMESTER: r.currentSemester ?? config.CURRENT_SEMESTER, SEMESTER_START: r.semesterStart ?? config.SEMESTER_START,
-            SESSION_EDIT_DAYS: r.sessionEditDays ?? config.SESSION_EDIT_DAYS, REMINDER_DAYS: r.reminderDays ?? config.REMINDER_DAYS,
+            REMINDER_DAYS: r.reminderDays ?? config.REMINDER_DAYS,
             SERVER_TODAY: r.today ?? null, DEMO: r.mode === 'demo', DEMO_ACCOUNTS: r.demoAccounts ?? [],
         });
-        if (r.institution) {
-            Object.assign(INSTITUTION, r.institution);
-            config.CHECKIN_MAX_ACCURACY = r.institution.location?.maxAccuracy ?? config.CHECKIN_MAX_ACCURACY;
-        }
+        if (r.institution) Object.assign(INSTITUTION, r.institution);
     } catch (error) {
         console.error('Configuration du serveur indisponible, valeurs par défaut utilisées :', error);
     }

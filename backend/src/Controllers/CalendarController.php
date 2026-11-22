@@ -100,15 +100,6 @@ class CalendarController
             $errors['description'] = 'La description ne doit pas dépasser 500 caractères.';
         }
 
-        $rawAudience = $input['audience'] ?? [];
-        if (!is_array($rawAudience)) {
-            $rawAudience = $rawAudience ? [$rawAudience] : [];
-        }
-        $audience = array_values(array_intersect(['chef', 'enseignant', 'etudiant'], $rawAudience));
-        if (empty($audience)) {
-            $errors['audience'] = 'Choisissez au moins un destinataire.';
-        }
-
         if (!empty($errors)) {
             Response::validationError('Corrigez les champs signalés.', $errors);
         }
@@ -122,69 +113,17 @@ class CalendarController
             'endTime'     => $endTime,
             'location'    => $location ?: null,
             'description' => $description ?: null,
-            'audience'    => $audience,
         ];
-    }
-
-    private static function notifyUsers(
-        PDO $db,
-        array $event,
-        string $kind,
-        string $authorId,
-        string $todayStr
-    ): int {
-        $eventEndDate = $event['end'] ?? $event['start'];
-        if ($eventEndDate < $todayStr) {
-            return 0;
-        }
-
-        // Récupérer les utilisateurs actifs dont le rôle est dans l'audience
-        $placeholders = implode(',', array_fill(0, count($event['audience']), '?'));
-        $sql = "SELECT id, role, settings FROM users WHERE active = 1 AND id != ? AND role IN ($placeholders)";
-        $params = array_merge([$authorId], $event['audience']);
-
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        $users = $stmt->fetchAll();
-
-        $nowStr = $todayStr . 'T' . date('H:i:s'); // jour de référence (simulé en démonstration) + heure réelle
-        $notified = 0;
-
-        $ins = $db->prepare('
-            INSERT INTO notifications (id, user_id, event_id, kind, stage, message, `read`, created_at)
-            VALUES (?, ?, ?, ?, NULL, ?, 0, ?)
-        ');
-
-        foreach ($users as $u) {
-            $settings = !empty($u['settings']) ? (is_string($u['settings']) ? json_decode($u['settings'], true) : $u['settings']) : [];
-            // Si announcements est explicitement false, on ne notifie pas
-            if (isset($settings['announcements']) && $settings['announcements'] === false) {
-                continue;
-            }
-
-            $ntfId = self::generateId('ntf', $db, 'notifications');
-            $ins->execute([
-                $ntfId,
-                $u['id'],
-                $event['id'],
-                $kind,
-                $event['title'],
-                $nowStr
-            ]);
-            $notified++;
-        }
-
-        return $notified;
     }
 
     public function listEvents(array $params, array $body, array $query): void
     {
-        $user = Auth::requireLogin();
+        Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $stmt = $db->query('
             SELECT id, type, title, start, end, start_time AS startTime, end_time AS endTime,
-                   location, description, audience, created_by AS createdBy, created_at AS createdAt
+                   location, description, created_by AS createdBy, created_at AS createdAt
             FROM events
             ORDER BY start ASC, start_time ASC
         ');
@@ -196,17 +135,6 @@ class CalendarController
 
         $filtered = [];
         foreach ($rows as $r) {
-            $aud = is_string($r['audience']) ? json_decode($r['audience'], true) : $r['audience'];
-            if (!is_array($aud)) {
-                $aud = [];
-            }
-            $r['audience'] = $aud;
-
-            // Filtrage par audience selon rôle (le chef voit tout)
-            if ($user['role'] !== 'chef' && !in_array($user['role'], $aud, true)) {
-                continue;
-            }
-
             // Période : (end ?? start) >= from ET start <= to
             $eventEnd = $r['end'] ?? $r['start'];
             if ($from && $eventEnd < $from) {
@@ -229,13 +157,13 @@ class CalendarController
 
     public function getEvent(array $params): void
     {
-        $user = Auth::requireLogin();
+        Auth::requireRole('chef');
         $id = $params['id'];
         $db = Database::getConnection();
 
         $stmt = $db->prepare('
             SELECT id, type, title, start, end, start_time AS startTime, end_time AS endTime,
-                   location, description, audience, created_by AS createdBy, created_at AS createdAt
+                   location, description, created_by AS createdBy, created_at AS createdAt
             FROM events WHERE id = ?
         ');
         $stmt->execute([$id]);
@@ -245,23 +173,12 @@ class CalendarController
             Response::json(['message' => 'Événement introuvable.'], 404);
         }
 
-        $aud = is_string($event['audience']) ? json_decode($event['audience'], true) : $event['audience'];
-        if (!is_array($aud)) {
-            $aud = [];
-        }
-        $event['audience'] = $aud;
-
-        // Contrôle d'audience
-        if ($user['role'] !== 'chef' && !in_array($user['role'], $aud, true)) {
-            Response::json(['message' => 'Événement introuvable.'], 404);
-        }
-
         Response::json($event);
     }
 
     public function rattrapageOpen(): void
     {
-        Auth::requireLogin();
+        Auth::requireRole('chef');
         $config = require __DIR__ . '/../../config/config.php';
         $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $db = Database::getConnection();
@@ -275,11 +192,7 @@ class CalendarController
 
     public function createEvent(array $params, array $body): void
     {
-        $user = Auth::requireLogin();
-        if ($user['role'] !== 'chef') {
-            Response::validationError('Seul le chef de département peut créer un événement.');
-        }
-
+        $user = Auth::requireRole('chef');
         $config = require __DIR__ . '/../../config/config.php';
         $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $db = Database::getConnection();
@@ -288,8 +201,8 @@ class CalendarController
         $id = self::generateId('evt', $db, 'events');
 
         $stmt = $db->prepare('
-            INSERT INTO events (id, type, title, start, end, start_time, end_time, location, description, audience, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO events (id, type, title, start, end, start_time, end_time, location, description, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ');
         $stmt->execute([
             $id,
@@ -301,35 +214,22 @@ class CalendarController
             $data['endTime'],
             $data['location'],
             $data['description'],
-            json_encode($data['audience']),
             $user['id'],
             $todayStr
         ]);
 
-        $event = array_merge($data, [
+        Response::json(array_merge($data, [
             'id'        => $id,
             'createdBy' => $user['id'],
             'createdAt' => $todayStr,
-        ]);
-
-        $notified = 0;
-        if (!empty($body['notify'])) {
-            $notified = self::notifyUsers($db, $event, 'created', $user['id'], $todayStr);
-        }
-
-        Response::json(['event' => $event, 'notified' => $notified], 201);
+        ]), 201);
     }
 
     public function updateEvent(array $params, array $body): void
     {
-        $user = Auth::requireLogin();
-        if ($user['role'] !== 'chef') {
-            Response::validationError('Seul le chef de département peut modifier un événement.');
-        }
-
+        Auth::requireRole('chef');
         $id = $params['id'];
         $config = require __DIR__ . '/../../config/config.php';
-        $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $db = Database::getConnection();
 
         $checkStmt = $db->prepare('SELECT * FROM events WHERE id = ?');
@@ -344,7 +244,7 @@ class CalendarController
         $stmt = $db->prepare('
             UPDATE events
             SET type = ?, title = ?, start = ?, end = ?, start_time = ?, end_time = ?,
-                location = ?, description = ?, audience = ?
+                location = ?, description = ?
             WHERE id = ?
         ');
         $stmt->execute([
@@ -356,31 +256,19 @@ class CalendarController
             $data['endTime'],
             $data['location'],
             $data['description'],
-            json_encode($data['audience']),
             $id
         ]);
 
-        $event = array_merge($data, [
+        Response::json(array_merge($data, [
             'id'        => $id,
             'createdBy' => $existing['created_by'],
             'createdAt' => $existing['created_at'],
-        ]);
-
-        $notified = 0;
-        if (!empty($body['notify'])) {
-            $notified = self::notifyUsers($db, $event, 'updated', $user['id'], $todayStr);
-        }
-
-        Response::json(['event' => $event, 'notified' => $notified]);
+        ]));
     }
 
     public function deleteEvent(array $params): void
     {
-        $user = Auth::requireLogin();
-        if ($user['role'] !== 'chef') {
-            Response::validationError('Seul le chef de département peut supprimer un événement.');
-        }
-
+        Auth::requireRole('chef');
         $id = $params['id'];
         $db = Database::getConnection();
 
@@ -418,7 +306,7 @@ class CalendarController
 
     public function listNotifications(array $params, array $body, array $query): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $db = Database::getConnection();
         $limit = !empty($query['limit']) ? (int)$query['limit'] : 5;
 
@@ -426,7 +314,7 @@ class CalendarController
             SELECT n.id, n.user_id AS userId, n.event_id AS eventId, n.kind, n.stage, n.message, n.read, n.created_at AS createdAt,
                    e.id AS e_id, e.type AS e_type, e.title AS e_title, e.start AS e_start, e.end AS e_end,
                    e.start_time AS e_start_time, e.end_time AS e_end_time, e.location AS e_location,
-                   e.description AS e_description, e.audience AS e_audience, e.created_by AS e_created_by, e.created_at AS e_created_at
+                   e.description AS e_description, e.created_by AS e_created_by, e.created_at AS e_created_at
             FROM notifications n
             LEFT JOIN events e ON e.id = n.event_id
             WHERE n.user_id = ?
@@ -442,7 +330,6 @@ class CalendarController
         foreach ($rows as $r) {
             $event = null;
             if (!empty($r['e_id'])) {
-                $aud = is_string($r['e_audience']) ? json_decode($r['e_audience'], true) : $r['e_audience'];
                 $event = [
                     'id'          => $r['e_id'],
                     'type'        => $r['e_type'],
@@ -453,7 +340,6 @@ class CalendarController
                     'endTime'     => $r['e_end_time'],
                     'location'    => $r['e_location'],
                     'description' => $r['e_description'],
-                    'audience'    => is_array($aud) ? $aud : [],
                     'createdBy'   => $r['e_created_by'],
                     'createdAt'   => $r['e_created_at'],
                 ];
@@ -477,7 +363,7 @@ class CalendarController
 
     public function unreadCount(): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $stmt = $db->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND `read` = 0');
@@ -489,7 +375,7 @@ class CalendarController
 
     public function markRead(array $params): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $id = $params['id'];
         $db = Database::getConnection();
 
@@ -501,7 +387,7 @@ class CalendarController
 
     public function markAllRead(): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $stmt = $db->prepare('UPDATE notifications SET `read` = 1 WHERE user_id = ?');

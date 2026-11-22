@@ -4,13 +4,11 @@
  */
 
 import { EventService, academicYearBounds } from '../services/index.js';
-import { AUDIENCES, EVENT_TYPES, eventType } from '../utils/event-types.js';
+import { EVENT_TYPES, eventType } from '../utils/event-types.js';
 import { confirmDialog, openFormModal, openModal, toast } from '../utils/dialogs.js';
 import { esc, formatDate, formatDateLong, formatDateRange, relativeDay } from '../utils/format.js';
 import { TONE_BG } from '../utils/ui.js';
-import { checkboxField, checkboxGroup, inputField, selectField, textareaField } from './fields.js';
-
-const audienceOptions = Object.entries(AUDIENCES).map(([value, label]) => ({ value, label }));
+import { inputField, selectField, textareaField } from './fields.js';
 
 function eventFields(event) {
     const bounds = academicYearBounds();
@@ -26,8 +24,7 @@ function eventFields(event) {
         ${inputField({ label: 'Lieu', name: 'location', value: event?.location ?? '', col: 'col-md-6', attrs: 'maxlength="80"', placeholder: 'Ex. Amphi A' })}
         <div class="col-12"><p class="stat-hint mb-0" data-times-hint></p></div>
         ${textareaField({ label: 'Description', name: 'description', value: event?.description ?? '', maxlength: 500 })}
-        ${checkboxGroup({ label: 'Destinataires', name: 'audience', options: audienceOptions, checked: event?.audience ?? Object.keys(AUDIENCES), required: true })}
-        ${checkboxField({ label: 'Prévenir les destinataires par une notification', name: 'notify', checked: true, hint: 'Un rappel automatique est aussi envoyé 7 jours puis 1 jour avant le début.' })}
+        <div class="col-12"><p class="stat-hint mb-0">Un rappel automatique apparaît dans vos notifications 7 jours puis 1 jour avant le début (réglable dans votre profil).</p></div>
       </div>`;
 }
 
@@ -59,13 +56,9 @@ export async function openEventForm({ event = null, actor, defaults = {} }) {
         body: eventFields(event ?? defaults),
         onOpen: wireTimes,
         async onSubmit(values) {
-            const notify = values.notify === '1';
-            const result = event
-                ? await EventService.update(event.id, values, actor, { notify })
-                : await EventService.create(values, actor, { notify });
-            const who = result.notified ? ` ${result.notified} personne${result.notified > 1 ? 's ont' : ' a'} été prévenue${result.notified > 1 ? 's' : ''}.` : '';
-            toast(`${event ? 'Événement modifié.' : 'Événement créé.'}${who}`);
-            return result.event;
+            const result = event ? await EventService.update(event.id, values, actor) : await EventService.create(values, actor);
+            toast(event ? 'Événement modifié.' : 'Événement créé.');
+            return result;
         },
     });
     return saved;
@@ -86,8 +79,7 @@ export function openEventDetail({ event, actor }) {
       <h3 class="event-detail-title">${esc(event.title)}</h3>
       ${detailRow('bi-calendar-event', `${esc(when)}<div class="stat-hint">${esc(relativeDay(event.start))}</div>`)}
       ${event.location ? detailRow('bi-geo-alt', esc(event.location)) : ''}
-      ${event.description ? detailRow('bi-card-text', esc(event.description)) : ''}
-      ${detailRow('bi-people', `Destinataires : ${event.audience.map((r) => esc(AUDIENCES[r] ?? r)).join(', ')}`)}`;
+      ${event.description ? detailRow('bi-card-text', esc(event.description)) : ''}`;
     const buttons = actor?.role === 'chef'
         ? [{ id: 'edit', label: 'Modifier', className: 'btn-custom-primary' }, { id: 'delete', label: 'Supprimer', className: 'btn-custom-danger' }]
         : [];
@@ -99,7 +91,7 @@ export async function confirmDeleteEvent(event, actor) {
     const notifications = await EventService.notificationCount(event.id);
     const confirmed = await confirmDialog({
         title: 'Supprimer cet événement ?',
-        message: `« ${event.title} » (${formatDateRange(event.start, event.end)}) sera retiré du calendrier de tous les destinataires.`,
+        message: `« ${event.title} » (${formatDateRange(event.start, event.end)}) sera retiré du calendrier.`,
         details: notifications ? [`${notifications} notification${notifications > 1 ? 's' : ''} associée${notifications > 1 ? 's' : ''} ser${notifications > 1 ? 'ont' : 'a'} supprimée${notifications > 1 ? 's' : ''}.`] : [],
         confirmLabel: 'Supprimer', danger: true,
     });

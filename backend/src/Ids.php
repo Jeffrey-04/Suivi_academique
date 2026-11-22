@@ -12,7 +12,7 @@ class Ids
     /** Préfixes autorisés → [table, largeur]. Liste blanche : aucun nom de table ne vient de l'extérieur. */
     private const KINDS = [
         'stu' => ['students', 3], 'tea' => ['teachers', 3], 'sub' => ['subjects', 3], 'grd' => ['grades', 4],
-        'blt' => ['bulletins', 3], 'ses' => ['sessions', 4], 'chk' => ['checkins', 4], 'evt' => ['events', 3], 'ntf' => ['notifications', 4],
+        'blt' => ['bulletins', 3], 'ses' => ['sessions', 4], 'slt' => ['timetable_slots', 3], 'evt' => ['events', 3], 'ntf' => ['notifications', 4],
     ];
 
     public static function next(PDO $db, string $prefix): string

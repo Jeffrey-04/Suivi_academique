@@ -1,8 +1,9 @@
 /*
  * Référentiels et personnes : filières, niveaux, étudiants, enseignants.
  *
+ * Étudiants et enseignants sont des FICHES gérées par le chef de département : ils n'ont pas de compte de connexion.
  * Les écritures (create / update / remove) valident les données et appliquent les règles d'intégrité
- * qu'appliquera le backend : e-mail unique, compte utilisateur synchronisé, suppression en cascade ou refusée.
+ * qu'appliquera le backend : e-mail unique parmi les fiches du même type, suppression en cascade ou refusée.
  * Elles lèvent une ValidationError (message général + messages par champ) que les formulaires affichent.
  */
 
@@ -15,7 +16,6 @@ import { request, requestOrNull } from './api.js';
 
 const enc = encodeURIComponent;
 
-const DEFAULT_PASSWORD = 'demo1234'; // mock uniquement : le backend générera / enverra un mot de passe temporaire
 const DEFAULT_PHOTO = 'assets/images/avatar.png';
 export const TEACHER_GRADES = ['Professeur', 'Maître de conférences', 'Chargé de cours', 'Vacataire'];
 
@@ -24,14 +24,14 @@ const text = (value) => String(value ?? '').trim();
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE = /^\+?[0-9][0-9 ]{6,18}$/;
 
-/** Contrôles communs à toutes les personnes ; retourne les erreurs par champ. */
-function validateIdentity(input, users, ownUserId) {
+/** Contrôles communs à toutes les personnes ; `others` = les autres fiches du même type (unicité de l'e-mail). */
+function validateIdentity(input, others) {
     const errors = {};
     if (text(input.firstName).length < 2) errors.firstName = 'Le prénom est obligatoire (2 caractères minimum).';
     if (text(input.lastName).length < 2) errors.lastName = 'Le nom est obligatoire (2 caractères minimum).';
     const email = text(input.email).toLowerCase();
     if (!EMAIL.test(email)) errors.email = "L'adresse e-mail n'est pas valide.";
-    else if (users.some((u) => u.id !== ownUserId && u.email.toLowerCase() === email)) errors.email = 'Cette adresse e-mail est déjà utilisée.';
+    else if (others.some((p) => p.email.toLowerCase() === email)) errors.email = 'Cette adresse e-mail est déjà utilisée.';
     if (text(input.birthPlace).length > 60) errors.birthPlace = 'Lieu de naissance trop long (60 caractères maximum).';
     if (text(input.phone) && !PHONE.test(text(input.phone))) errors.phone = 'Numéro invalide (chiffres et espaces, ex. +237 677 12 34 56).';
     return errors;
@@ -39,12 +39,6 @@ function validateIdentity(input, users, ownUserId) {
 
 function fail(errors, message = 'Veuillez corriger les champs signalés.') {
     if (Object.keys(errors).length) throw new ValidationError(message, errors);
-}
-
-/** Répercute nom, prénom et e-mail sur le compte de connexion associé à un profil. */
-function syncUser(users, profile) {
-    const user = users.find((u) => u.profileId === profile.id);
-    if (user) Object.assign(user, { firstName: profile.firstName, lastName: profile.lastName, email: profile.email });
 }
 
 export const ReferenceService = {
@@ -102,8 +96,8 @@ export const StudentService = {
 
     async create(input) {
         if (!config.USE_MOCK) return request('POST', '/students', { body: input });
-        const [students, users, levels, filieres] = await Promise.all([list('students'), list('users'), list('levels'), list('filieres')]);
-        const errors = validateIdentity(input, users, null);
+        const [students, levels, filieres] = await Promise.all([list('students'), list('levels'), list('filieres')]);
+        const errors = validateIdentity(input, students);
         const level = levels.find((l) => l.id === input.levelId);
         if (!level) errors.levelId = 'Choisissez un niveau.';
         validateBirthDate(input.birthDate, errors);
@@ -124,21 +118,17 @@ export const StudentService = {
             filiereId: level.filiereId, levelId: level.id,
             photo: DEFAULT_PHOTO,
         };
-        users.push({
-            id: `usr-${id}`, email: student.email, password: DEFAULT_PASSWORD, role: 'etudiant', profileId: id,
-            firstName: student.firstName, lastName: student.lastName, photo: student.photo, demo: false, active: true, mustChangePassword: true,
-        });
         students.push(student);
-        await Promise.all([replaceAll('students', students), replaceAll('users', users)]);
-        return { ...student, temporaryPassword: DEFAULT_PASSWORD, emailSent: false }; // comme l'API : mot de passe à communiquer
+        await replaceAll('students', students);
+        return student;
     },
 
     async update(id, input) {
         if (!config.USE_MOCK) return request('PUT', `/students/${enc(id)}`, { body: input });
-        const [students, users, levels, grades] = await Promise.all([list('students'), list('users'), list('levels'), list('grades')]);
+        const [students, levels, grades] = await Promise.all([list('students'), list('levels'), list('grades')]);
         const student = students.find((s) => s.id === id);
         if (!student) throw new ValidationError('Étudiant introuvable.');
-        const errors = validateIdentity(input, users, `usr-${id}`);
+        const errors = validateIdentity(input, students.filter((s) => s.id !== id));
         const level = levels.find((l) => l.id === input.levelId);
         if (!level) errors.levelId = 'Choisissez un niveau.';
         else if (level.id !== student.levelId && grades.some((g) => g.studentId === id)) {
@@ -151,8 +141,7 @@ export const StudentService = {
             firstName: text(input.firstName), lastName: text(input.lastName), birthDate: input.birthDate, birthPlace: text(input.birthPlace),
             email: text(input.email).toLowerCase(), phone: text(input.phone), filiereId: level.filiereId, levelId: level.id,
         });
-        syncUser(users, student);
-        await Promise.all([replaceAll('students', students), replaceAll('users', users)]);
+        await replaceAll('students', students);
         return student;
     },
 
@@ -163,20 +152,15 @@ export const StudentService = {
         return { grades: grades.filter((g) => g.studentId === id).length, bulletins: bulletins.filter((b) => b.studentId === id).length };
     },
 
-    /** Supprime l'étudiant, son compte, ses notes, ses bulletins et ses notifications. */
+    /** Supprime l'étudiant, ses notes et ses bulletins. */
     async remove(id) {
         if (!config.USE_MOCK) { await request('DELETE', `/students/${enc(id)}`); return; }
-        const [students, users, grades, bulletins, notifications] = await Promise.all([
-            list('students'), list('users'), list('grades'), list('bulletins'), list('notifications'),
-        ]);
+        const [students, grades, bulletins] = await Promise.all([list('students'), list('grades'), list('bulletins')]);
         if (!students.some((s) => s.id === id)) throw new ValidationError('Étudiant introuvable.');
-        const userId = `usr-${id}`;
         await Promise.all([
             replaceAll('students', students.filter((s) => s.id !== id)),
-            replaceAll('users', users.filter((u) => u.id !== userId)),
             replaceAll('grades', grades.filter((g) => g.studentId !== id)),
             replaceAll('bulletins', bulletins.filter((b) => b.studentId !== id)),
-            replaceAll('notifications', notifications.filter((n) => n.userId !== userId)),
         ]);
     },
 };
@@ -196,8 +180,8 @@ export const TeacherService = {
 
     async create(input) {
         if (!config.USE_MOCK) return request('POST', '/teachers', { body: input });
-        const [teachers, users] = await Promise.all([list('teachers'), list('users')]);
-        const errors = { ...validateIdentity(input, users, null), ...validateTeacherFields(input) };
+        const teachers = await list('teachers');
+        const errors = { ...validateIdentity(input, teachers), ...validateTeacherFields(input) };
         fail(errors);
 
         const id = nextId('tea', teachers);
@@ -208,28 +192,23 @@ export const TeacherService = {
             contractHours: Number(input.contractHours),
             photo: DEFAULT_PHOTO,
         };
-        users.push({
-            id: `usr-${id}`, email: teacher.email, password: DEFAULT_PASSWORD, role: 'enseignant', profileId: id,
-            firstName: teacher.firstName, lastName: teacher.lastName, photo: teacher.photo, demo: false, active: true, mustChangePassword: true,
-        });
         teachers.push(teacher);
-        await Promise.all([replaceAll('teachers', teachers), replaceAll('users', users)]);
-        return { ...teacher, temporaryPassword: DEFAULT_PASSWORD, emailSent: false };
+        await replaceAll('teachers', teachers);
+        return teacher;
     },
 
     async update(id, input) {
         if (!config.USE_MOCK) return request('PUT', `/teachers/${enc(id)}`, { body: input });
-        const [teachers, users] = await Promise.all([list('teachers'), list('users')]);
+        const teachers = await list('teachers');
         const teacher = teachers.find((t) => t.id === id);
         if (!teacher) throw new ValidationError('Enseignant introuvable.');
-        fail({ ...validateIdentity(input, users, `usr-${id}`), ...validateTeacherFields(input) });
+        fail({ ...validateIdentity(input, teachers.filter((t) => t.id !== id)), ...validateTeacherFields(input) });
 
         Object.assign(teacher, {
             firstName: text(input.firstName), lastName: text(input.lastName), grade: input.grade,
             email: text(input.email).toLowerCase(), phone: text(input.phone), contractHours: Number(input.contractHours),
         });
-        syncUser(users, teacher);
-        await Promise.all([replaceAll('teachers', teachers), replaceAll('users', users)]);
+        await replaceAll('teachers', teachers);
         return teacher;
     },
 
@@ -243,7 +222,7 @@ export const TeacherService = {
     /** Refusée si l'enseignant a des matières ou un historique de séances (intégrité des références). */
     async remove(id) {
         if (!config.USE_MOCK) { await request('DELETE', `/teachers/${enc(id)}`); return; }
-        const [teachers, users, notifications, checkins] = await Promise.all([list('teachers'), list('users'), list('notifications'), list('checkins')]);
+        const teachers = await list('teachers');
         if (!teachers.some((t) => t.id === id)) throw new ValidationError('Enseignant introuvable.');
         const usage = await this.usage(id);
         if (usage.subjects.length || usage.sessions) {
@@ -252,13 +231,7 @@ export const TeacherService = {
             if (usage.sessions) parts.push(`${usage.sessions} séance${usage.sessions > 1 ? 's' : ''} enregistrée${usage.sessions > 1 ? 's' : ''}`);
             throw new ValidationError(`Suppression impossible : cet enseignant a ${parts.join(' et ')}. Réattribuez ses matières d'abord.`);
         }
-        const userId = `usr-${id}`;
-        await Promise.all([
-            replaceAll('teachers', teachers.filter((t) => t.id !== id)),
-            replaceAll('users', users.filter((u) => u.id !== userId)),
-            replaceAll('notifications', notifications.filter((n) => n.userId !== userId)),
-            replaceAll('checkins', checkins.filter((c) => c.teacherId !== id)),
-        ]);
+        await replaceAll('teachers', teachers.filter((t) => t.id !== id));
     },
 };
 

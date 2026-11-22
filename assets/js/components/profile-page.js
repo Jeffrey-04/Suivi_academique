@@ -1,14 +1,14 @@
 /*
- * Page « Mon profil », commune aux trois rôles (le balisage des trois profil.html est identique) :
- *  - identité et photo ; coordonnées (e-mail, téléphone) ; sécurité (mot de passe) ; réglages personnels.
- * Chacun ne modifie que son propre profil (AccountService le contrôle). Les formulaires sont dans la page :
+ * Page « Mon profil » du chef de département :
+ *  - identité et photo ; coordonnées (e-mail) ; sécurité (mot de passe) ; réglages personnels.
+ * AccountService contrôle que chacun ne modifie que son propre profil. Les formulaires sont dans la page :
  * bindInlineForm gère l'envoi et affiche les messages du service sous les champs.
  */
 
 import { config, ROLES, url } from '../config.js';
 import { AccountService, CALENDAR_VIEWS, DEFAULT_PHOTO, PASSWORD_MIN } from '../services/index.js';
 import { bindInlineForm, queueToast, toast } from '../utils/dialogs.js';
-import { esc, formatDate, formatHours, fullName } from '../utils/format.js';
+import { esc, fullName } from '../utils/format.js';
 import { renderInto } from '../utils/ui.js';
 import { checkboxField, checkboxGroup, inputField, selectField } from './fields.js';
 
@@ -17,14 +17,6 @@ const PHOTO_SIZE = 256; // côté de l'image enregistrée (recadrée au carré)
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 
 const row = (label, value) => (value ? `<div class="profile-row"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>` : '');
-
-function details({ user, person, className }) {
-    if (user.role === 'etudiant' && person) {
-        return [['Matricule', person.matricule], ['Classe', className], ['Née ou né le', formatDate(person.birthDate)], ['Lieu de naissance', person.birthPlace]];
-    }
-    if (user.role === 'enseignant' && person) return [['Grade', person.grade], ['Volume horaire dû', formatHours(person.contractHours)]];
-    return [['Département', config.DEPARTMENT]];
-}
 
 function formShell(id, title, hint, fields, submitLabel) {
     return `
@@ -40,9 +32,8 @@ function formShell(id, title, hint, fields, submitLabel) {
 }
 
 function render(profile) {
-    const { user, person, settings } = profile;
+    const { user, settings } = profile;
     const isDefaultPhoto = user.photo === DEFAULT_PHOTO;
-    const hasPhone = user.role !== 'chef';
     const reminderOptions = config.REMINDER_DAYS.map((d) => ({ value: String(d), label: d === 1 ? '1 jour avant' : `${d} jours avant` }));
 
     const identity = `
@@ -59,19 +50,12 @@ function render(profile) {
           ${isDefaultPhoto ? '' : '<button type="button" class="btn-table-action" id="btn-photo-remove"><i class="bi bi-trash"></i> Retirer</button>'}
           <input type="file" id="photo-input" accept="image/png,image/jpeg,image/webp" class="d-none" aria-label="Choisir une photo de profil">
         </div>
-        <dl class="profile-list profile-list-stacked mb-0">${row('Adresse e-mail', user.email)}${details(profile).map(([l, v]) => row(l, v)).join('')}</dl>
-      </div>
-      ${user.role === 'chef' ? `
-      <a class="card mb-0 profile-link-card" href="${esc(url('pages/chef/comptes.html'))}">
-        <div class="d-flex align-items-center gap-3"><i class="bi bi-shield-lock profile-link-icon" aria-hidden="true"></i>
-          <div><div class="fw-bold">Gestion des comptes</div><div class="stat-hint">Activer, désactiver, réinitialiser un mot de passe</div></div>
-          <i class="bi bi-arrow-right ms-auto" aria-hidden="true"></i></div>
-      </a>` : ''}`;
+        <dl class="profile-list profile-list-stacked mb-0">${row('Adresse e-mail', user.email)}${row('Département', config.DEPARTMENT)}</dl>
+      </div>`;
 
     const contact = formShell('contact', 'Coordonnées',
         "L'adresse e-mail sert d'identifiant de connexion.",
-        `${inputField({ label: 'Adresse e-mail', name: 'email', type: 'email', value: user.email, required: true, col: hasPhone ? 'col-md-6' : 'col-12', attrs: 'autocomplete="email"' })}
-         ${hasPhone ? inputField({ label: 'Téléphone', name: 'phone', type: 'tel', value: person?.phone ?? '', col: 'col-md-6', placeholder: '+237 6XX XX XX XX', attrs: 'autocomplete="tel"' }) : ''}
+        `${inputField({ label: 'Adresse e-mail', name: 'email', type: 'email', value: user.email, required: true, col: 'col-12', attrs: 'autocomplete="email"' })}
          ${inputField({ label: 'Mot de passe actuel', name: 'currentPassword', id: 'contact-current-password', type: 'password', col: 'col-12', attrs: 'autocomplete="current-password"' })}
          <div class="col-12"><p class="stat-hint mb-0">Le mot de passe actuel n'est demandé que si vous changez l'adresse e-mail.</p></div>`,
         'Enregistrer les coordonnées');
@@ -85,8 +69,7 @@ function render(profile) {
 
     const preferences = formShell('reglages', 'Réglages',
         'Ces choix ne concernent que votre compte.',
-        `<div class="col-12"><div class="settings-title">Notifications</div></div>
-         ${checkboxField({ label: 'Être prévenu des nouveaux événements et de leurs modifications', name: 'announcements', checked: settings.announcements, switchStyle: true })}
+        `<div class="col-12"><div class="settings-title">Rappels</div></div>
          ${checkboxGroup({ label: 'Rappels automatiques avant un événement', name: 'reminders', options: reminderOptions, checked: settings.reminders.map(String) })}
          <div class="col-12"><div class="settings-title">Affichage</div></div>
          ${selectField({ label: 'Affichage du calendrier', name: 'calendarView', value: settings.calendarView, col: 'col-md-6', placeholder: null, options: Object.entries(CALENDAR_VIEWS).map(([value, label]) => ({ value, label })) })}
@@ -114,7 +97,7 @@ async function resizeImage(file) {
 
 export async function mountProfilePage(ctx) {
     const { user } = ctx;
-    const actor = { id: user.id, role: user.role, profileId: user.profileId };
+    const actor = { id: user.id, role: user.role };
     const root = $('profile-root');
     $('page-subtitle').textContent = 'Votre compte, votre sécurité et vos réglages';
 

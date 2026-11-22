@@ -5,6 +5,7 @@ require_once __DIR__ . '/../Database.php';
 require_once __DIR__ . '/../Response.php';
 require_once __DIR__ . '/../Auth.php';
 require_once __DIR__ . '/../Ids.php';
+require_once __DIR__ . '/../Timetable.php';
 
 class SubjectController
 {
@@ -15,30 +16,18 @@ class SubjectController
 
     public function listSubjects(array $params, array $body, array $query): void
     {
-        $user = Auth::requireLogin();
+        Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $sql = 'SELECT id, code, name, coefficient, planned_hours AS plannedHours, level_id AS levelId, semester, teacher_id AS teacherId, unit_id AS unitId
                 FROM subjects WHERE 1=1';
         $bindings = [];
 
-        // Scoping
-        if ($user['role'] === 'enseignant') {
-            $sql .= ' AND teacher_id = ?';
-            $bindings[] = $user['profileId'];
-        } elseif ($user['role'] === 'etudiant') {
-            $stuStmt = $db->prepare('SELECT level_id FROM students WHERE id = ?');
-            $stuStmt->execute([$user['profileId']]);
-            $lvl = $stuStmt->fetchColumn();
-            $sql .= ' AND level_id = ?';
-            $bindings[] = $lvl;
-        }
-
         if (!empty($query['levelId'])) {
             $sql .= ' AND level_id = ?';
             $bindings[] = $query['levelId'];
         }
-        if (!empty($query['teacherId']) && $user['role'] === 'chef') {
+        if (!empty($query['teacherId'])) {
             $sql .= ' AND teacher_id = ?';
             $bindings[] = $query['teacherId'];
         }
@@ -62,7 +51,7 @@ class SubjectController
 
     public function getSubject(array $params): void
     {
-        $user = Auth::requireLogin();
+        Auth::requireRole('chef');
         $id = $params['id'];
         $db = Database::getConnection();
 
@@ -73,19 +62,6 @@ class SubjectController
 
         if (!$subject) {
             Response::json(['message' => 'Matière introuvable.'], 404);
-        }
-
-        // Scoping
-        if ($user['role'] === 'enseignant' && $subject['teacherId'] !== $user['profileId']) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
-        if ($user['role'] === 'etudiant') {
-            $stuStmt = $db->prepare('SELECT level_id FROM students WHERE id = ?');
-            $stuStmt->execute([$user['profileId']]);
-            $lvl = $stuStmt->fetchColumn();
-            if ($subject['levelId'] !== $lvl) {
-                Response::json(['message' => 'Accès non autorisé.'], 403);
-            }
         }
 
         $subject['coefficient'] = (float)$subject['coefficient'];
@@ -237,12 +213,13 @@ class SubjectController
         // Vérification de blocage si des notes ou des séances existent
         $grdCount = (int)Database::scalar('SELECT COUNT(*) FROM grades WHERE subject_id = ?', [$id]);
         $sesCount = (int)Database::scalar('SELECT COUNT(*) FROM sessions WHERE subject_id = ?', [$id]);
-        if ($grdCount > 0 || $sesCount > 0) {
+        $slotCount = Timetable::countForSubject($db, $id);
+        if ($grdCount > 0 || $sesCount > 0 || $slotCount > 0) {
             if ($levelId !== $subject['level_id']) {
-                $errors['levelId'] = 'Classe non modifiable : des notes ou des séances sont déjà enregistrées.';
+                $errors['levelId'] = 'Classe non modifiable : des notes, des séances ou des créneaux d\'emploi du temps sont déjà enregistrés.';
             }
             if ($semester !== $subject['semester']) {
-                $errors['semester'] = 'Semestre non modifiable : des notes ou des séances sont déjà enregistrées.';
+                $errors['semester'] = 'Semestre non modifiable : des notes, des séances ou des créneaux d\'emploi du temps sont déjà enregistrés.';
             }
         }
 
@@ -261,7 +238,15 @@ class SubjectController
             $teaStmt->execute([$teacherId]);
             if (!$teaStmt->fetch()) {
                 $errors['teacherId'] = 'Enseignant inconnu.';
+            } elseif ($teacherId !== $subject['teacher_id']) {
+                // La grille suit l'enseignant de la matière : le nouveau titulaire ne doit pas avoir déjà cours à ces heures
+                $conflict = Timetable::teacherChangeConflict($db, $id, $teacherId);
+                if ($conflict) {
+                    $errors['teacherId'] = $conflict;
+                }
             }
+        } elseif ($slotCount > 0) {
+            $errors['teacherId'] = "Cette matière a des créneaux d'emploi du temps : un enseignant est nécessaire.";
         }
 
         if ($unitId !== null) {
@@ -309,10 +294,12 @@ class SubjectController
 
         $grades = (int)Database::scalar('SELECT COUNT(*) FROM grades WHERE subject_id = ?', [$id]);
         $sessions = (int)Database::scalar('SELECT COUNT(*) FROM sessions WHERE subject_id = ?', [$id]);
+        $slots = Timetable::countForSubject(Database::getConnection(), $id);
 
         Response::json([
             'grades'   => $grades,
             'sessions' => $sessions,
+            'slots'    => $slots,
         ]);
     }
 
@@ -346,7 +333,6 @@ class SubjectController
 
         $db->beginTransaction();
         try {
-            $db->prepare('DELETE FROM checkins WHERE subject_id = ?')->execute([$id]);
             $db->prepare('DELETE FROM subjects WHERE id = ?')->execute([$id]);
             $db->commit();
         } catch (Throwable $e) {

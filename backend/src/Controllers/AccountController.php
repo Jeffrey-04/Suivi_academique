@@ -5,14 +5,16 @@ require_once __DIR__ . '/../Database.php';
 require_once __DIR__ . '/../Response.php';
 require_once __DIR__ . '/../Auth.php';
 require_once __DIR__ . '/../Passwords.php';
-require_once __DIR__ . '/../Mailer.php';
 
+/**
+ * Compte du chef de département (seul utilisateur de l'application) : profil, e-mail, photo, mot de passe, réglages.
+ * Les enseignants et les étudiants n'ont pas de compte : ce sont des fiches gérées par le chef.
+ */
 class AccountController
 {
     private static function resolveSettings(?array $userSettings, array $config): array
     {
         return [
-            'announcements'    => true,
             'reminders'        => $config['reminder_days'] ?? [7, 1],
             'calendarView'     => 'auto',
             'sidebarCollapsed' => false,
@@ -22,69 +24,22 @@ class AccountController
 
     public function profile(): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $config = require __DIR__ . '/../../config/config.php';
-        $db = Database::getConnection();
-
-        $person = null;
-        $className = null;
-
-        if ($user['role'] === 'etudiant' && $user['profileId']) {
-            $stmt = $db->prepare('
-                SELECT s.id, s.matricule, s.first_name AS firstName, s.last_name AS lastName, s.birth_date AS birthDate,
-                       s.birth_place AS birthPlace, s.email, s.phone, s.filiere_id AS filiereId, s.level_id AS levelId, s.photo,
-                       l.name AS lvl_name, f.name AS fil_name
-                FROM students s
-                JOIN levels l ON l.id = s.level_id
-                JOIN filieres f ON f.id = l.filiere_id
-                WHERE s.id = ?
-            ');
-            $stmt->execute([$user['profileId']]);
-            $row = $stmt->fetch();
-            if ($row) {
-                $className = "{$row['lvl_name']} · {$row['fil_name']}";
-                $person = [
-                    'id'         => $row['id'],
-                    'matricule'  => $row['matricule'],
-                    'firstName'  => $row['firstName'],
-                    'lastName'   => $row['lastName'],
-                    'birthDate'  => $row['birthDate'],
-                    'birthPlace' => $row['birthPlace'],
-                    'email'      => $row['email'],
-                    'phone'      => $row['phone'],
-                    'filiereId'  => $row['filiereId'],
-                    'levelId'    => $row['levelId'],
-                    'photo'      => $row['photo'],
-                ];
-            }
-        } elseif ($user['role'] === 'enseignant' && $user['profileId']) {
-            $stmt = $db->prepare('
-                SELECT id, first_name AS firstName, last_name AS lastName, grade, email, phone, contract_hours AS contractHours, photo
-                FROM teachers WHERE id = ?
-            ');
-            $stmt->execute([$user['profileId']]);
-            $person = $stmt->fetch() ?: null;
-            if ($person) {
-                $person['contractHours'] = (int)$person['contractHours'];
-            }
-        }
 
         Response::json([
-            'user'      => $user,
-            'person'    => $person,
-            'className' => $className,
-            'settings'  => self::resolveSettings($user['settings'], $config),
+            'user'     => $user,
+            'settings' => self::resolveSettings($user['settings'], $config),
         ]);
     }
 
     public function updateContact(array $params, array $body): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $errors = [];
         $email = strtolower(trim((string)($body['email'] ?? '')));
-        $phone = trim((string)($body['phone'] ?? ''));
         $currentPassword = (string)($body['currentPassword'] ?? '');
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -95,10 +50,6 @@ class AccountController
             if ($chk->fetch()) {
                 $errors['email'] = 'Cette adresse e-mail est déjà utilisée.';
             }
-        }
-
-        if ($user['role'] !== 'chef' && $phone !== '' && !preg_match('/^\+?[0-9][0-9 ]{6,18}$/', $phone)) {
-            $errors['phone'] = 'Numéro invalide (chiffres et espaces, ex. +237 677 12 34 56).';
         }
 
         // Si l'e-mail change, le mot de passe actuel est requis et vérifié
@@ -116,24 +67,8 @@ class AccountController
             Response::validationError('Veuillez corriger les champs signalés.', $errors);
         }
 
-        $db->beginTransaction();
-        try {
-            $updUser = $db->prepare('UPDATE users SET email = ? WHERE id = ?');
-            $updUser->execute([$email, $user['id']]);
-
-            if ($user['role'] === 'etudiant' && $user['profileId']) {
-                $updStu = $db->prepare('UPDATE students SET email = ?, phone = ? WHERE id = ?');
-                $updStu->execute([$email, $phone ?: null, $user['profileId']]);
-            } elseif ($user['role'] === 'enseignant' && $user['profileId']) {
-                $updTea = $db->prepare('UPDATE teachers SET email = ?, phone = ? WHERE id = ?');
-                $updTea->execute([$email, $phone ?: null, $user['profileId']]);
-            }
-
-            $db->commit();
-        } catch (Throwable $e) {
-            $db->rollBack();
-            Response::serverError($e, 'La mise à jour des coordonnées a échoué');
-        }
+        $upd = $db->prepare('UPDATE users SET email = ? WHERE id = ?');
+        $upd->execute([$email, $user['id']]);
 
         $user['email'] = $email;
         Response::json($user);
@@ -141,7 +76,7 @@ class AccountController
 
     public function updatePhoto(array $params, array $body): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $photo = $body['photo'] ?? null;
@@ -157,22 +92,8 @@ class AccountController
 
         $storedPhoto = $photo ?: 'assets/images/avatar.png';
 
-        $db->beginTransaction();
-        try {
-            $upd = $db->prepare('UPDATE users SET photo = ? WHERE id = ?');
-            $upd->execute([$storedPhoto, $user['id']]);
-
-            if ($user['role'] === 'etudiant' && $user['profileId']) {
-                $db->prepare('UPDATE students SET photo = ? WHERE id = ?')->execute([$storedPhoto, $user['profileId']]);
-            } elseif ($user['role'] === 'enseignant' && $user['profileId']) {
-                $db->prepare('UPDATE teachers SET photo = ? WHERE id = ?')->execute([$storedPhoto, $user['profileId']]);
-            }
-
-            $db->commit();
-        } catch (Throwable $e) {
-            $db->rollBack();
-            Response::serverError($e, 'La mise à jour de la photo a échoué');
-        }
+        $upd = $db->prepare('UPDATE users SET photo = ? WHERE id = ?');
+        $upd->execute([$storedPhoto, $user['id']]);
 
         $user['photo'] = $storedPhoto;
         Response::json($user);
@@ -180,7 +101,7 @@ class AccountController
 
     public function changePassword(array $params, array $body): void
     {
-        $user = Auth::requireLogin();
+        $user = Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $errors = [];
@@ -219,8 +140,7 @@ class AccountController
 
     public function updateSettings(array $params, array $body): void
     {
-        $user = Auth::requireLogin();
-        $config = require __DIR__ . '/../../config/config.php';
+        $user = Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $errors = [];
@@ -246,7 +166,6 @@ class AccountController
         }
 
         $newSettings = [
-            'announcements'    => isset($body['announcements']) ? (bool)$body['announcements'] : true,
             'reminders'        => array_values(array_map('intval', $reminders)),
             'calendarView'     => $calendarView,
             'sidebarCollapsed' => !empty($body['sidebarCollapsed']),
@@ -257,128 +176,4 @@ class AccountController
 
         Response::json($newSettings);
     }
-
-    public function listAccounts(array $params, array $body, array $query): void
-    {
-        Auth::requireRole('chef');
-        $db = Database::getConnection();
-
-        $stmt = $db->query('
-            SELECT u.id, u.email, u.role, u.profile_id AS profileId, u.first_name AS firstName, u.last_name AS lastName,
-                   u.photo, u.active, u.must_change_password AS mustChangePassword, u.settings,
-                   s.matricule, t.grade
-            FROM users u
-            LEFT JOIN students s ON s.id = u.profile_id AND u.role = "etudiant"
-            LEFT JOIN teachers t ON t.id = u.profile_id AND u.role = "enseignant"
-            ORDER BY u.role ASC, u.last_name ASC, u.first_name ASC
-        ');
-        $rows = $stmt->fetchAll();
-
-        $accounts = [];
-        foreach ($rows as $r) {
-            $detail = null;
-            if ($r['role'] === 'chef') {
-                $detail = 'Chef de département';
-            } elseif ($r['role'] === 'enseignant') {
-                $detail = $r['grade'];
-            } elseif ($r['role'] === 'etudiant') {
-                $detail = $r['matricule'];
-            }
-
-            $settings = !empty($r['settings']) ? (is_string($r['settings']) ? json_decode($r['settings'], true) : $r['settings']) : null;
-
-            $accounts[] = [
-                'id'                 => $r['id'],
-                'email'              => $r['email'],
-                'role'               => $r['role'],
-                'profileId'          => $r['profileId'],
-                'firstName'          => $r['firstName'] ?? '',
-                'lastName'           => $r['lastName'] ?? '',
-                'photo'              => $r['photo'] ?? 'assets/images/avatar.png',
-                'active'             => (bool)$r['active'],
-                'mustChangePassword' => (bool)$r['mustChangePassword'],
-                'settings'           => $settings,
-                'detail'             => $detail,
-            ];
-        }
-
-        // Filtres
-        if (!empty($query['role'])) {
-            $accounts = array_values(array_filter($accounts, fn($a) => $a['role'] === $query['role']));
-        }
-        if (isset($query['active']) && $query['active'] !== '') {
-            $act = filter_var($query['active'], FILTER_VALIDATE_BOOLEAN);
-            $accounts = array_values(array_filter($accounts, fn($a) => $a['active'] === $act));
-        }
-        if (!empty($query['q'])) {
-            $needle = mb_strtolower(trim((string)$query['q']), 'UTF-8');
-            $accounts = array_values(array_filter($accounts, function ($a) use ($needle) {
-                $searchable = mb_strtolower("{$a['firstName']} {$a['lastName']} {$a['email']} {$a['detail']}", 'UTF-8');
-                return strpos($searchable, $needle) !== false;
-            }));
-        }
-
-        Response::json($accounts);
-    }
-
-    public function setActive(array $params, array $body): void
-    {
-        $user = Auth::requireRole('chef');
-        $id = $params['id'];
-        $db = Database::getConnection();
-
-        if ($user['id'] === $id) {
-            Response::validationError('Vous ne pouvez pas désactiver votre propre compte.');
-        }
-
-        $stmt = $db->prepare('SELECT * FROM users WHERE id = ?');
-        $stmt->execute([$id]);
-        $target = $stmt->fetch();
-        if (!$target) {
-            Response::validationError('Compte introuvable.');
-        }
-
-        $active = !empty($body['active']) ? 1 : 0;
-        $upd = $db->prepare('UPDATE users SET active = ? WHERE id = ?');
-        $upd->execute([$active, $id]);
-
-        $target['active'] = $active;
-        Response::json(Auth::formatPublicUser($target));
-    }
-
-    public function resetPassword(array $params): void
-    {
-        $user = Auth::requireRole('chef');
-        $id = $params['id'];
-        $db = Database::getConnection();
-
-        if ($user['id'] === $id) {
-            Response::validationError('Pour changer votre mot de passe, passez par votre profil.');
-        }
-
-        $stmt = $db->prepare('SELECT * FROM users WHERE id = ?');
-        $stmt->execute([$id]);
-        $target = $stmt->fetch();
-        if (!$target) {
-            Response::validationError('Compte introuvable.');
-        }
-
-        $tempPass = Passwords::temporary();
-        $hash = Passwords::hash($tempPass);
-
-        $upd = $db->prepare('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?');
-        $upd->execute([$hash, $id]);
-
-        $target['must_change_password'] = 1;
-
-        // Le mot de passe est aussi envoyé par e-mail quand le service est configuré ; il reste affiché une fois au chef
-        $mail = Mailer::sendTemporaryPassword($target['email'], trim(($target['first_name'] ?? '') . ' ' . ($target['last_name'] ?? '')), $tempPass, true);
-
-        Response::json([
-            'user'              => Auth::formatPublicUser($target),
-            'temporaryPassword' => $tempPass,
-            'emailSent'         => $mail['sent'],
-        ]);
-    }
 }
-

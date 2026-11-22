@@ -73,13 +73,12 @@ CREATE TABLE IF NOT EXISTS `students` (
   CONSTRAINT `fk_students_level` FOREIGN KEY (`level_id`) REFERENCES `levels` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. Utilisateurs (Comptes de connexion)
+-- 6. Compte du chef de département (seul utilisateur : les enseignants et les étudiants n'ont pas de compte)
 CREATE TABLE IF NOT EXISTS `users` (
   `id` VARCHAR(30) NOT NULL,
   `email` VARCHAR(190) NOT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
-  `role` ENUM('chef','enseignant','etudiant') NOT NULL,
-  `profile_id` VARCHAR(20) DEFAULT NULL,
+  `role` ENUM('chef') NOT NULL DEFAULT 'chef',
   `first_name` VARCHAR(80) DEFAULT NULL,
   `last_name` VARCHAR(80) DEFAULT NULL,
   `photo` MEDIUMTEXT DEFAULT NULL,
@@ -88,8 +87,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `settings` JSON DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_users_email` (`email`),
-  KEY `idx_users_role` (`role`),
-  KEY `idx_users_profile` (`profile_id`)
+  KEY `idx_users_role` (`role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 7. Matières
@@ -177,23 +175,7 @@ CREATE TABLE IF NOT EXISTS `sessions` (
   CONSTRAINT `fk_sessions_subject` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 11. Pointages géolocalisés (Checkins)
-CREATE TABLE IF NOT EXISTS `checkins` (
-  `id` VARCHAR(20) NOT NULL,
-  `teacher_id` VARCHAR(20) NOT NULL,
-  `subject_id` VARCHAR(20) NOT NULL,
-  `date` DATE NOT NULL,
-  `time` CHAR(5) NOT NULL,
-  `distance` INT NOT NULL,
-  `accuracy` INT NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_checkins_daily` (`teacher_id`, `subject_id`, `date`),
-  KEY `fk_checkins_subject` (`subject_id`),
-  CONSTRAINT `fk_checkins_teacher` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_checkins_subject` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 12. Événements du calendrier
+-- 11. Événements du calendrier
 CREATE TABLE IF NOT EXISTS `events` (
   `id` VARCHAR(20) NOT NULL,
   `type` VARCHAR(30) NOT NULL,
@@ -204,14 +186,13 @@ CREATE TABLE IF NOT EXISTS `events` (
   `end_time` CHAR(5) DEFAULT NULL,
   `location` VARCHAR(100) DEFAULT NULL,
   `description` VARCHAR(500) DEFAULT NULL,
-  `audience` JSON NOT NULL,
   `created_by` VARCHAR(30) NOT NULL,
   `created_at` DATE NOT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_events_dates` (`start`, `end`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 13. Notifications
+-- 12. Notifications (rappels J-7 / J-1 du chef)
 CREATE TABLE IF NOT EXISTS `notifications` (
   `id` VARCHAR(20) NOT NULL,
   `user_id` VARCHAR(30) NOT NULL,
@@ -227,14 +208,14 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   CONSTRAINT `fk_notifications_event` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 14. Compteurs d'identifiants (stu-001, ses-0871…) : incrément atomique, aucune collision
+-- 13. Compteurs d'identifiants (stu-001, ses-0871…) : incrément atomique, aucune collision
 CREATE TABLE IF NOT EXISTS `id_sequences` (
   `name` VARCHAR(10) NOT NULL,
   `value` INT NOT NULL DEFAULT 0,
   PRIMARY KEY (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 15. Échecs de connexion (limitation des tentatives)
+-- 14. Échecs de connexion (limitation des tentatives)
 CREATE TABLE IF NOT EXISTS `login_attempts` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `email` VARCHAR(190) NOT NULL,
@@ -243,6 +224,32 @@ CREATE TABLE IF NOT EXISTS `login_attempts` (
   PRIMARY KEY (`id`),
   KEY `idx_attempts_email` (`email`, `created_at`),
   KEY `idx_attempts_ip` (`ip`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 15. Emploi du temps : créneaux hebdomadaires récurrents, rattachés à une matière
+-- (la matière fixe l'enseignant, la classe et le semestre : aucune incohérence possible)
+CREATE TABLE IF NOT EXISTS `timetable_slots` (
+  `id` VARCHAR(20) NOT NULL,
+  `subject_id` VARCHAR(20) NOT NULL,
+  `weekday` TINYINT NOT NULL,            -- 1 = lundi … 6 = samedi
+  `start_time` CHAR(5) NOT NULL,
+  `end_time` CHAR(5) NOT NULL,
+  `room` VARCHAR(40) DEFAULT NULL,
+  `valid_from` DATE NOT NULL,
+  `valid_until` DATE NOT NULL,           -- période de validité : du valid_from au valid_until inclus
+  PRIMARY KEY (`id`),
+  KEY `idx_slots_subject` (`subject_id`),
+  KEY `idx_slots_weekday` (`weekday`, `start_time`),
+  CONSTRAINT `fk_slots_subject` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 16. Séances annulées de l'emploi du temps (jour férié, salle indisponible…) : une ligne par créneau et par date
+CREATE TABLE IF NOT EXISTS `timetable_exceptions` (
+  `slot_id` VARCHAR(20) NOT NULL,
+  `date` DATE NOT NULL,
+  `reason` VARCHAR(120) DEFAULT NULL,
+  PRIMARY KEY (`slot_id`, `date`),
+  CONSTRAINT `fk_exceptions_slot` FOREIGN KEY (`slot_id`) REFERENCES `timetable_slots` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

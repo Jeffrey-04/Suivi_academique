@@ -471,25 +471,4 @@ class Calculations
         $mondayTime = strtotime('-' . ($dayOfWeek - 1) . ' days', $time);
         return date('Y-m-d', $mondayTime);
     }
-
-    public static function haversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): int
-    {
-        $earthRadius = 6371000; // mètres
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon / 2) * sin($dLon / 2);
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-        return (int)round($earthRadius * $c);
-    }
-
-    public static function formatDistance(int $meters): string
-    {
-        if ($meters < 1000) {
-            return $meters . ' m';
-        }
-        $km = number_format($meters / 1000, 1, ',', '');
-        return (str_ends_with($km, ',0') ? substr($km, 0, -2) : $km) . ' km';
-    }
 }

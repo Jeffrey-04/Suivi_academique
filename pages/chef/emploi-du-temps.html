@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Saisie des notes - Suivi Académique</title>
+  <title>Emploi du temps - Suivi Académique</title>
   <link rel="icon" type="image/png" href="../../assets/images/favicon.ico">
   <link rel="stylesheet" href="../../assets/libs/bootstrap/css/bootstrap.min.css">
   <link rel="stylesheet" href="../../assets/libs/bootstrap-icons/bootstrap-icons.css">
@@ -20,20 +20,30 @@
     <main>
       <div class="page-header">
         <div>
-          <h1 class="page-title">Saisie des notes</h1>
-          <p class="page-subtitle" id="page-subtitle">Enregistrez vos notes en brouillon, puis validez-les : une note validée est verrouillée et entre dans les moyennes.</p>
+          <h1 class="page-title">Emploi du temps</h1>
+          <p class="page-subtitle" id="page-subtitle">Créneaux hebdomadaires des enseignants et suivi des séances prévues.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-start">
+          <button class="btn-custom btn-custom-primary" type="button" id="btn-add-slot"><i class="bi bi-plus-lg"></i> Nouveau créneau</button>
+          <div id="export-menu"></div>
         </div>
       </div>
 
-      <div class="table-card-custom filter-bar" id="controls" hidden>
+      <div class="row g-4 mb-4" id="kpis"></div>
+
+      <div class="table-card-custom filter-bar">
         <div class="table-header-control">
-          <div class="filter-bar-group filter-bar-grow">
-            <label for="select-subject" class="form-label-custom">Matière</label>
-            <select class="form-select-custom" id="select-subject"></select>
+          <div class="filter-bar-group">
+            <label for="filter-teacher" class="form-label-custom">Enseignant</label>
+            <select class="form-select-custom" id="filter-teacher"></select>
           </div>
           <div class="filter-bar-group">
-            <span class="form-label-custom" id="type-label">Évaluation</span>
-            <div class="segmented" role="group" aria-labelledby="type-label" id="type-buttons"></div>
+            <label for="filter-class" class="form-label-custom">Classe</label>
+            <select class="form-select-custom" id="filter-class"></select>
+          </div>
+          <div class="filter-bar-group filter-bar-grow">
+            <span class="form-label-custom" id="tab-label">Affichage</span>
+            <div class="segmented" role="group" aria-labelledby="tab-label" id="tabs"></div>
           </div>
         </div>
       </div>
@@ -45,6 +55,6 @@
   </div>
 
   <script src="../../assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script type="module" src="../../assets/js/pages/enseignant-saisie-notes.js"></script>
+  <script type="module" src="../../assets/js/pages/chef-emploi-du-temps.js"></script>
 </body>
 </html>

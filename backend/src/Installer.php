@@ -18,7 +18,7 @@ class Installer
 
     /** Collections vidées puis réimportées en mode démonstration (ordre : enfants avant parents). */
     private const TABLES = [
-        'notifications', 'checkins', 'sessions', 'bulletins', 'grades', 'subjects', 'users', 'students',
+        'notifications', 'timetable_exceptions', 'timetable_slots', 'sessions', 'bulletins', 'grades', 'subjects', 'users', 'students',
         'teachers', 'units', 'levels', 'filieres', 'events', 'login_attempts', 'id_sequences',
     ];
 
@@ -53,6 +53,62 @@ class Installer
             throw new RuntimeException('Fichier schema.sql introuvable.');
         }
         $db->exec($sql);
+        self::upgrade($db);
+    }
+
+    private static function hasTable(PDO $db, string $table): bool
+    {
+        $st = $db->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
+        $st->execute([$table]);
+        return (int)$st->fetchColumn() > 0;
+    }
+
+    private static function hasColumn(PDO $db, string $table, string $column): bool
+    {
+        $st = $db->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $st->execute([$table, $column]);
+        return (int)$st->fetchColumn() > 0;
+    }
+
+    /**
+     * Met à niveau une base créée par la version à trois rôles (enseignant / étudiant avec comptes) :
+     * un seul compte (le chef), plus de pointage géolocalisé, plus d'audience des événements.
+     * Idempotent : sans effet sur une base déjà à jour. Les fiches (étudiants, enseignants, notes, séances…) sont conservées.
+     */
+    public static function upgrade(PDO $db): void
+    {
+        if (self::hasTable($db, 'users') && self::hasColumn($db, 'users', 'profile_id')) {
+            $chefId = $db->query("SELECT id FROM users WHERE role = 'chef' ORDER BY id LIMIT 1")->fetchColumn();
+            if ($chefId === false) {
+                throw new RuntimeException('Mise à niveau impossible : aucun compte chef de département dans la base.');
+            }
+            $db->beginTransaction();
+            try {
+                // Les actions faites par les anciens comptes enseignants / étudiants sont désormais celles du chef
+                $db->prepare("UPDATE grades SET entered_by = ? WHERE entered_by <> ?")->execute([$chefId, $chefId]);
+                $db->prepare("UPDATE grades SET validated_by = ? WHERE validated_by IS NOT NULL AND validated_by <> ?")->execute([$chefId, $chefId]);
+                $db->prepare("UPDATE sessions SET declared_by = ? WHERE declared_by <> ?")->execute([$chefId, $chefId]);
+                $db->prepare("UPDATE events SET created_by = ? WHERE created_by <> ?")->execute([$chefId, $chefId]);
+                $db->prepare("UPDATE bulletins SET generated_by = ? WHERE generated_by <> ?")->execute([$chefId, $chefId]);
+                $db->prepare("DELETE FROM notifications WHERE user_id <> ?")->execute([$chefId]);
+                $db->prepare("DELETE FROM users WHERE role <> 'chef'")->execute();
+                $db->prepare("DELETE FROM notifications WHERE kind IN ('created', 'updated')")->execute();
+                $db->commit();
+            } catch (Throwable $e) {
+                $db->rollBack();
+                throw $e;
+            }
+            $db->exec("ALTER TABLE users DROP INDEX idx_users_profile");
+            $db->exec("ALTER TABLE users DROP COLUMN profile_id");
+            $db->exec("ALTER TABLE users MODIFY role ENUM('chef') NOT NULL DEFAULT 'chef'");
+        }
+        if (self::hasTable($db, 'events') && self::hasColumn($db, 'events', 'audience')) {
+            $db->exec('ALTER TABLE events DROP COLUMN audience');
+        }
+        if (self::hasTable($db, 'checkins')) {
+            $db->exec('DROP TABLE checkins');
+            $db->exec("DELETE FROM id_sequences WHERE name = 'chk'");
+        }
     }
 
     private static function truncateAll(PDO $db): void
@@ -105,13 +161,13 @@ class Installer
         }
         $counts['students'] = count($rows);
 
-        $stmt = $db->prepare('INSERT INTO users (id, email, password_hash, role, profile_id, first_name, last_name, photo, active, must_change_password, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt = $db->prepare('INSERT INTO users (id, email, password_hash, role, first_name, last_name, photo, active, must_change_password, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $demoAccounts = [];
         $users = self::load('users.json');
         foreach ($users as $u) {
             $plain = (string)($u['password'] ?? 'demo1234'); // mot de passe en clair du jeu d'essai : haché à l'import
             $stmt->execute([
-                $u['id'], strtolower($u['email']), Passwords::hash($plain), $u['role'], $u['profileId'] ?? null,
+                $u['id'], strtolower($u['email']), Passwords::hash($plain), $u['role'],
                 $u['firstName'] ?? null, $u['lastName'] ?? null, $u['photo'] ?? null, (int)($u['active'] ?? 1),
                 (int)($u['mustChangePassword'] ?? 0), !empty($u['settings']) ? json_encode($u['settings']) : null,
             ]);
@@ -150,15 +206,21 @@ class Installer
         }
         $counts['sessions'] = count($rows);
 
-        $stmt = $db->prepare('INSERT INTO checkins (id, teacher_id, subject_id, date, time, distance, accuracy) VALUES (?, ?, ?, ?, ?, ?, ?)');
-        foreach ($rows = self::load('checkins.json') as $c) {
-            $stmt->execute([$c['id'], $c['teacherId'], $c['subjectId'], $c['date'], $c['time'], (int)$c['distance'], (int)$c['accuracy']]);
+        $stmt = $db->prepare('INSERT INTO timetable_slots (id, subject_id, weekday, start_time, end_time, room, valid_from, valid_until) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($rows = self::load('timetableSlots.json') as $sl) {
+            $stmt->execute([$sl['id'], $sl['subjectId'], (int)$sl['weekday'], $sl['startTime'], $sl['endTime'], $sl['room'] ?? null, $sl['validFrom'], $sl['validUntil'] ?? null]);
         }
-        $counts['checkins'] = count($rows);
+        $counts['timetableSlots'] = count($rows);
 
-        $stmt = $db->prepare('INSERT INTO events (id, type, title, start, end, start_time, end_time, location, description, audience, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt = $db->prepare('INSERT INTO timetable_exceptions (slot_id, date, reason) VALUES (?, ?, ?)');
+        foreach ($rows = self::load('timetableExceptions.json') as $ex) {
+            $stmt->execute([$ex['slotId'], $ex['date'], $ex['reason'] ?? null]);
+        }
+        $counts['timetableExceptions'] = count($rows);
+
+        $stmt = $db->prepare('INSERT INTO events (id, type, title, start, end, start_time, end_time, location, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         foreach ($rows = self::load('events.json') as $ev) {
-            $stmt->execute([$ev['id'], $ev['type'], $ev['title'], $ev['start'], $ev['end'] ?? null, $ev['startTime'] ?? null, $ev['endTime'] ?? null, $ev['location'] ?? null, $ev['description'] ?? null, json_encode($ev['audience'] ?? []), $ev['createdBy'], $ev['createdAt']]);
+            $stmt->execute([$ev['id'], $ev['type'], $ev['title'], $ev['start'], $ev['end'] ?? null, $ev['startTime'] ?? null, $ev['endTime'] ?? null, $ev['location'] ?? null, $ev['description'] ?? null, $ev['createdBy'], $ev['createdAt']]);
         }
         $counts['events'] = count($rows);
 
@@ -184,7 +246,7 @@ class Installer
             $counts = self::importStructure($db);
             $db->exec('SET FOREIGN_KEY_CHECKS = 1');
         }
-        $stmt = $db->prepare('INSERT INTO users (id, email, password_hash, role, profile_id, first_name, last_name, photo, active, must_change_password) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, 1, 0)');
+        $stmt = $db->prepare('INSERT INTO users (id, email, password_hash, role, first_name, last_name, photo, active, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0)');
         $stmt->execute(['usr-chef', strtolower($chef['email']), Passwords::hash($chef['password']), 'chef', $chef['firstName'], $chef['lastName'], 'assets/images/avatar.png']);
         $counts['users'] = 1;
         Ids::resync($db);

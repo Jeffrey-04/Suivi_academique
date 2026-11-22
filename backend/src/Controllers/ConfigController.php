@@ -21,7 +21,6 @@ class ConfigController
             'academicYear'    => $config['academic_year'],
             'currentSemester' => $config['current_semester'],
             'semesterStart'   => $config['semester_start'],
-            'sessionEditDays' => $config['session_edit_days'],
             'reminderDays'    => $config['reminder_days'],
             'institution'     => $config['institution'],
         ];

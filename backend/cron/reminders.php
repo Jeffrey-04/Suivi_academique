@@ -1,6 +1,6 @@
 <?php
 /**
- * Tâche planifiée (cron quotidien) pour l'envoi des rappels automatiques d'événements.
+ * Tâche planifiée (cron quotidien) pour la création des rappels automatiques d'événements (J-7, J-1) pour le chef.
  * Peut être lancée par CLI : php reminders.php
  * ou appelée via URL sécurisée ou cron job hPanel/cPanel.
  */
@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/Database.php';
+require_once __DIR__ . '/../src/Ids.php';
 
 function syncReminders(): int
 {
@@ -16,20 +17,12 @@ function syncReminders(): int
     $todayStr = $config['simulated_today'] ?: date('Y-m-d');
     $db = Database::getConnection();
 
-    $users = $db->query('SELECT id, role, settings FROM users WHERE active = 1')->fetchAll();
-    $eventsStmt = $db->prepare('SELECT id, title, start, audience FROM events WHERE start >= ?');
+    // Le chef est l'unique destinataire des rappels
+    $users = $db->query("SELECT id, settings FROM users WHERE active = 1 AND role = 'chef'")->fetchAll();
+    $eventsStmt = $db->prepare('SELECT id, title, start FROM events WHERE start >= ?');
     $eventsStmt->execute([$todayStr]);
     $events = $eventsStmt->fetchAll();
-    $notifications = $db->query('SELECT id, user_id, event_id, kind, stage, created_at FROM notifications')->fetchAll();
-
-    $stmtMax = $db->query("SELECT id FROM notifications WHERE id LIKE 'ntf-%'");
-    $ids = $stmtMax->fetchAll(PDO::FETCH_COLUMN);
-    $maxSeq = 0;
-    foreach ($ids as $id) {
-        if (preg_match('/^ntf-0*(\d+)$/', $id, $m)) {
-            $maxSeq = max($maxSeq, (int)$m[1]);
-        }
-    }
+    $notifications = $db->query("SELECT user_id, event_id, kind, stage FROM notifications WHERE kind = 'reminder' OR kind IS NULL")->fetchAll();
 
     $ins = $db->prepare('
         INSERT INTO notifications (id, user_id, event_id, kind, stage, message, `read`, created_at)
@@ -39,19 +32,10 @@ function syncReminders(): int
     $createdCount = 0;
 
     foreach ($events as $event) {
-        $aud = is_string($event['audience']) ? json_decode($event['audience'], true) : $event['audience'];
-        if (!is_array($aud)) {
-            continue;
-        }
-
         $eventStart = $event['start'];
         $leftDays = (int)round((strtotime($eventStart) - strtotime($todayStr)) / 86400);
 
         foreach ($users as $user) {
-            if (!in_array($user['role'], $aud, true)) {
-                continue;
-            }
-
             $userSettings = !empty($user['settings']) ? (is_string($user['settings']) ? json_decode($user['settings'], true) : $user['settings']) : [];
             $reminderStages = $userSettings['reminders'] ?? $config['reminder_days'] ?? [7, 1];
             if (empty($reminderStages)) {
@@ -71,55 +55,28 @@ function syncReminders(): int
                 continue;
             }
 
-            // Vérifier si une notification existe déjà
-            $existing = array_filter($notifications, fn($n) => $n['user_id'] === $user['id'] && $n['event_id'] === $event['id']);
-
+            // Un rappel de cette échéance (ou plus proche) existe-t-il déjà pour cet événement ?
             $alreadyNotified = false;
-            foreach ($existing as $n) {
-                $kind = $n['kind'] ?? 'reminder';
-                $stage = $n['stage'] !== null ? (int)$n['stage'] : 7;
-
-                if ($kind === 'reminder' && $stage <= $matchedStage) {
-                    $alreadyNotified = true;
-                    break;
-                }
-
-                if (in_array($kind, ['created', 'updated'], true)) {
-                    $targetDate = date('Y-m-d', strtotime("-{$matchedStage} days", strtotime($eventStart)));
-                    if (substr($n['created_at'], 0, 10) >= $targetDate) {
+            foreach ($notifications as $n) {
+                if ($n['user_id'] === $user['id'] && $n['event_id'] === $event['id']) {
+                    $stage = $n['stage'] !== null ? (int)$n['stage'] : 7;
+                    if ($stage <= $matchedStage) {
                         $alreadyNotified = true;
                         break;
                     }
                 }
             }
-
             if ($alreadyNotified) {
                 continue;
             }
 
-            $maxSeq++;
-            $ntfId = sprintf('ntf-%04d', $maxSeq);
+            $ntfId = Ids::next($db, 'ntf');
             $targetDate = date('Y-m-d', strtotime("-{$matchedStage} days", strtotime($eventStart)));
             $createdAt = "{$targetDate}T07:00:00";
 
-            $ins->execute([
-                $ntfId,
-                $user['id'],
-                $event['id'],
-                $matchedStage,
-                $event['title'],
-                $createdAt
-            ]);
+            $ins->execute([$ntfId, $user['id'], $event['id'], $matchedStage, $event['title'], $createdAt]);
 
-            $notifications[] = [
-                'id'         => $ntfId,
-                'user_id'    => $user['id'],
-                'event_id'   => $event['id'],
-                'kind'       => 'reminder',
-                'stage'      => $matchedStage,
-                'created_at' => $createdAt,
-            ];
-
+            $notifications[] = ['user_id' => $user['id'], 'event_id' => $event['id'], 'kind' => 'reminder', 'stage' => $matchedStage];
             $createdCount++;
         }
     }

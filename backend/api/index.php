@@ -11,7 +11,7 @@ require_once __DIR__ . '/../src/Controllers/SubjectController.php';
 require_once __DIR__ . '/../src/Controllers/GradeController.php';
 require_once __DIR__ . '/../src/Controllers/BulletinController.php';
 require_once __DIR__ . '/../src/Controllers/SessionController.php';
-require_once __DIR__ . '/../src/Controllers/PresenceController.php';
+require_once __DIR__ . '/../src/Controllers/TimetableController.php';
 require_once __DIR__ . '/../src/Controllers/CalendarController.php';
 require_once __DIR__ . '/../src/Controllers/AccountController.php';
 require_once __DIR__ . '/../src/Controllers/StatsController.php';
@@ -85,12 +85,19 @@ $router->delete('/sessions/{id}', [SessionController::class, 'deleteSession']);
 $router->get('/teachers/{id}/hours', [SessionController::class, 'teacherHours']);
 $router->get('/hours', [SessionController::class, 'allHours']);
 
-// ---- 7. Présence géolocalisée ----------------------------------------------
-$router->get('/institution/location', [PresenceController::class, 'location']);
-$router->get('/checkins', [PresenceController::class, 'listCheckins']);
-$router->post('/checkins', [PresenceController::class, 'checkIn']);
+// ---- 6bis. Emploi du temps (créneaux hebdomadaires, occurrences, confirmation des séances) --------------
+$router->get('/timetable/occurrences', [TimetableController::class, 'listOccurrences']);
+$router->post('/timetable/occurrences/confirm', [TimetableController::class, 'confirm']);
+$router->post('/timetable/occurrences/absence', [TimetableController::class, 'absence']);
+$router->post('/timetable/occurrences/cancel', [TimetableController::class, 'cancel']);
+$router->post('/timetable/occurrences/restore', [TimetableController::class, 'restore']);
+$router->get('/timetable/slots', [TimetableController::class, 'listSlots']);
+$router->get('/timetable/slots/{id}', [TimetableController::class, 'getSlot']);
+$router->post('/timetable/slots', [TimetableController::class, 'createSlot']);
+$router->put('/timetable/slots/{id}', [TimetableController::class, 'updateSlot']);
+$router->delete('/timetable/slots/{id}', [TimetableController::class, 'deleteSlot']);
 
-// ---- 8. Calendrier & Notifications -----------------------------------------
+// ---- 7. Calendrier & Notifications -----------------------------------------
 $router->get('/events/rattrapage-open', [CalendarController::class, 'rattrapageOpen']);
 $router->get('/events/{id}/notification-count', [CalendarController::class, 'notificationCount']);
 $router->get('/events/{id}', [CalendarController::class, 'getEvent']);
@@ -104,18 +111,15 @@ $router->post('/notifications/read-all', [CalendarController::class, 'markAllRea
 $router->post('/notifications/{id}/read', [CalendarController::class, 'markRead']);
 $router->get('/notifications', [CalendarController::class, 'listNotifications']);
 
-// ---- 9. Comptes, profil, réglages ------------------------------------------
+// ---- 8. Compte du chef : profil et réglages ------------------------------------------
 $router->get('/me/profile', [AccountController::class, 'profile']);
 $router->patch('/me/contact', [AccountController::class, 'updateContact']);
 $router->put('/me/photo', [AccountController::class, 'updatePhoto']);
 $router->put('/me/password', [AccountController::class, 'changePassword']);
 $router->put('/me/settings', [AccountController::class, 'updateSettings']);
 
-$router->get('/accounts', [AccountController::class, 'listAccounts']);
-$router->patch('/accounts/{id}', [AccountController::class, 'setActive']);
-$router->post('/accounts/{id}/reset-password', [AccountController::class, 'resetPassword']);
 
-// ---- 10. Statistiques (Tableaux de bord) -----------------------------------
+// ---- 9. Statistiques (Tableaux de bord) -----------------------------------
 $router->get('/stats/teaching-weekly', [StatsController::class, 'teachingWeekly']);
 $router->get('/stats/class-averages', [StatsController::class, 'classAverages']);
 $router->get('/stats/grade-progress', [StatsController::class, 'gradeProgress']);

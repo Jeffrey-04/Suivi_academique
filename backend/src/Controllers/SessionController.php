@@ -24,36 +24,15 @@ class SessionController
         return ($mAStart < $mBEnd) && ($mBStart < $mAEnd);
     }
 
-    private static function diffDays(string $dateA, string $dateB): int
-    {
-        $tA = strtotime($dateA);
-        $tB = strtotime($dateB);
-        return (int)round(abs($tB - $tA) / 86400);
-    }
-
-    private static function canModifySession(array $session, array $actor, string $todayStr, int $editDays): bool
-    {
-        if ($actor['role'] === 'chef') {
-            return true;
-        }
-        if (
-            $actor['role'] === 'enseignant' &&
-            $session['teacher_id'] === $actor['profileId'] &&
-            $session['status'] === 'present' &&
-            $session['declared_by'] === $actor['id'] &&
-            self::diffDays($session['date'], $todayStr) <= $editDays
-        ) {
-            return true;
-        }
-        return false;
-    }
-
-    private static function validateSession(
+    /**
+     * Valide une séance (déclaration, absence, correction, confirmation depuis l'emploi du temps).
+     * La matière détermine l'enseignant. Public : l'emploi du temps applique exactement les mêmes règles.
+     */
+    public static function validateSession(
         array $input,
         PDO $db,
         array $config,
-        ?string $ownId = null,
-        ?string $forcedTeacherId = null
+        ?string $ownId = null
     ): array {
         $errors = [];
         $subjectId = (string)($input['subjectId'] ?? '');
@@ -66,8 +45,6 @@ class SessionController
             $errors['subjectId'] = 'Choisissez une matière.';
         } elseif (empty($subject['teacher_id'])) {
             $errors['subjectId'] = "Cette matière n'a pas d'enseignant attribué.";
-        } elseif ($forcedTeacherId && $subject['teacher_id'] !== $forcedTeacherId) {
-            $errors['subjectId'] = "Cette matière ne vous est pas attribuée.";
         }
 
         $date = trim((string)($input['date'] ?? ''));
@@ -176,18 +153,48 @@ class SessionController
         ];
     }
 
+    /** Enregistre une séance validée (présente ou absente) et renvoie sa représentation d'API. */
+    public static function insertSession(PDO $db, array $val, string $status, string $actorId, ?string $note): array
+    {
+        $id = self::generateId('ses', $db, 'sessions');
+        $stmt = $db->prepare('
+            INSERT INTO sessions (id, teacher_id, subject_id, date, start_time, end_time, status, declared_by, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ');
+        $stmt->execute([
+            $id,
+            $val['subject']['teacher_id'],
+            $val['subject']['id'],
+            $val['date'],
+            $val['start'],
+            $val['end'],
+            $status,
+            $actorId,
+            $note,
+        ]);
+
+        return [
+            'id'         => $id,
+            'teacherId'  => $val['subject']['teacher_id'],
+            'subjectId'  => $val['subject']['id'],
+            'date'       => $val['date'],
+            'startTime'  => $val['start'],
+            'endTime'    => $val['end'],
+            'status'     => $status,
+            'declaredBy' => $actorId,
+            'note'       => $note,
+        ];
+    }
+
     public function listSessions(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $sql = 'SELECT id, teacher_id AS teacherId, subject_id AS subjectId, date, start_time AS startTime, end_time AS endTime, status, declared_by AS declaredBy, note FROM sessions WHERE 1=1';
         $bindings = [];
 
-        if ($user['role'] === 'enseignant') {
-            $sql .= ' AND teacher_id = ?';
-            $bindings[] = $user['profileId'];
-        } elseif (!empty($query['teacherId'])) {
+        if (!empty($query['teacherId'])) {
             $sql .= ' AND teacher_id = ?';
             $bindings[] = $query['teacherId'];
         }
@@ -219,7 +226,7 @@ class SessionController
 
     public function detailed(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $sql = '
@@ -237,10 +244,7 @@ class SessionController
         ';
         $bindings = [];
 
-        if ($user['role'] === 'enseignant') {
-            $sql .= ' AND s.teacher_id = ?';
-            $bindings[] = $user['profileId'];
-        } elseif (!empty($query['teacherId'])) {
+        if (!empty($query['teacherId'])) {
             $sql .= ' AND s.teacher_id = ?';
             $bindings[] = $query['teacherId'];
         }
@@ -267,19 +271,9 @@ class SessionController
         $stmt->execute($bindings);
         $rows = $stmt->fetchAll();
 
-        // Récupérer les checkins pour déterminer 'verified'
-        $checkinStmt = $db->query('SELECT teacher_id, subject_id, date FROM checkins');
-        $marked = [];
-        while ($c = $checkinStmt->fetch()) {
-            $key = "{$c['teacher_id']}|{$c['subject_id']}|{$c['date']}";
-            $marked[$key] = true;
-        }
-
         $detailed = [];
         foreach ($rows as $r) {
             $hours = Calculations::sessionHours($r);
-            $checkinKey = "{$r['teacherId']}|{$r['subjectId']}|{$r['date']}";
-            $verified = ($r['status'] === 'present' && isset($marked[$checkinKey]));
 
             $detailed[] = [
                 'id'         => $r['id'],
@@ -325,7 +319,6 @@ class SessionController
                     ],
                     'short'     => $r['l_name'] . ' ' . $r['f_code'],
                 ],
-                'verified'   => $verified,
             ];
         }
 
@@ -334,16 +327,13 @@ class SessionController
 
     public function stats(array $params, array $body, array $query): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $db = Database::getConnection();
 
         $sql = 'SELECT id, start_time AS startTime, end_time AS endTime, status FROM sessions WHERE 1=1';
         $bindings = [];
 
-        if ($user['role'] === 'enseignant') {
-            $sql .= ' AND teacher_id = ?';
-            $bindings[] = $user['profileId'];
-        } elseif (!empty($query['teacherId'])) {
+        if (!empty($query['teacherId'])) {
             $sql .= ' AND teacher_id = ?';
             $bindings[] = $query['teacherId'];
         }
@@ -393,7 +383,7 @@ class SessionController
 
     public function getSession(array $params): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $id = $params['id'];
         $db = Database::getConnection();
 
@@ -405,64 +395,28 @@ class SessionController
             Response::json(['message' => 'Séance introuvable.'], 404);
         }
 
-        if ($user['role'] === 'enseignant' && $session['teacherId'] !== $user['profileId']) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
-
         Response::json($session);
     }
 
+    /** Le chef déclare une séance effectuée pour l'enseignant de la matière (statut « présent »). */
     public function declareSession(array $params, array $body): void
     {
-        $user = Auth::requireRole('enseignant');
-        if ($user['role'] !== 'enseignant') {
-            Response::validationError("Seul l'enseignant peut déclarer ses séances.");
-        }
-
+        $user = Auth::requireRole('chef');
         $config = require __DIR__ . '/../../config/config.php';
         $db = Database::getConnection();
 
-        $val = self::validateSession($body, $db, $config, null, $user['profileId']);
+        $val = self::validateSession($body, $db, $config);
         if (!empty($val['errors'])) {
             Response::validationError('Veuillez corriger les champs signalés.', $val['errors']);
         }
 
-        $id = self::generateId('ses', $db, 'sessions');
-        $stmt = $db->prepare('
-            INSERT INTO sessions (id, teacher_id, subject_id, date, start_time, end_time, status, declared_by, note)
-            VALUES (?, ?, ?, ?, ?, ?, "present", ?, ?)
-        ');
-        $stmt->execute([
-            $id,
-            $val['subject']['teacher_id'],
-            $val['subject']['id'],
-            $val['date'],
-            $val['start'],
-            $val['end'],
-            $user['id'],
-            $val['note'] ?: null
-        ]);
-
-        Response::json([
-            'id'         => $id,
-            'teacherId'  => $val['subject']['teacher_id'],
-            'subjectId'  => $val['subject']['id'],
-            'date'       => $val['date'],
-            'startTime'  => $val['start'],
-            'endTime'    => $val['end'],
-            'status'     => 'present',
-            'declaredBy' => $user['id'],
-            'note'       => $val['note'] ?: null,
-        ], 201);
+        Response::json(self::insertSession($db, $val, 'present', $user['id'], $val['note'] ?: null), 201);
     }
 
+    /** Le chef enregistre l'absence d'un enseignant (la raison est facultative). */
     public function recordAbsence(array $params, array $body): void
     {
         $user = Auth::requireRole('chef');
-        if ($user['role'] !== 'chef') {
-            Response::validationError("Seul le chef de département peut enregistrer une absence.");
-        }
-
         $config = require __DIR__ . '/../../config/config.php';
         $db = Database::getConnection();
 
@@ -472,42 +426,14 @@ class SessionController
         }
 
         $note = $val['note'] !== '' ? $val['note'] : 'Raison non communiquée';
-
-        $id = self::generateId('ses', $db, 'sessions');
-        $stmt = $db->prepare('
-            INSERT INTO sessions (id, teacher_id, subject_id, date, start_time, end_time, status, declared_by, note)
-            VALUES (?, ?, ?, ?, ?, ?, "absent", ?, ?)
-        ');
-        $stmt->execute([
-            $id,
-            $val['subject']['teacher_id'],
-            $val['subject']['id'],
-            $val['date'],
-            $val['start'],
-            $val['end'],
-            $user['id'],
-            $note
-        ]);
-
-        Response::json([
-            'id'         => $id,
-            'teacherId'  => $val['subject']['teacher_id'],
-            'subjectId'  => $val['subject']['id'],
-            'date'       => $val['date'],
-            'startTime'  => $val['start'],
-            'endTime'    => $val['end'],
-            'status'     => 'absent',
-            'declaredBy' => $user['id'],
-            'note'       => $note,
-        ], 201);
+        Response::json(self::insertSession($db, $val, 'absent', $user['id'], $note), 201);
     }
 
     public function updateSession(array $params, array $body): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $id = $params['id'];
         $config = require __DIR__ . '/../../config/config.php';
-        $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $db = Database::getConnection();
 
         $stmt = $db->prepare('SELECT * FROM sessions WHERE id = ?');
@@ -517,17 +443,9 @@ class SessionController
             Response::validationError('Séance introuvable.');
         }
 
-        if (!self::canModifySession($session, $user, $todayStr, (int)$config['session_edit_days'])) {
-            $msg = ($user['role'] === 'enseignant')
-                ? "Vous ne pouvez corriger que vos déclarations des {$config['session_edit_days']} derniers jours."
-                : "Vous n'avez pas le droit de modifier cette séance.";
-            Response::validationError($msg);
-        }
+        $val = self::validateSession($body, $db, $config, $id);
 
-        $forcedTeacherId = ($user['role'] === 'enseignant') ? $user['profileId'] : null;
-        $val = self::validateSession($body, $db, $config, $id, $forcedTeacherId);
-
-        $status = ($user['role'] === 'chef') ? ($body['status'] ?? $session['status']) : 'present';
+        $status = $body['status'] ?? $session['status'];
         if (!in_array($status, ['present', 'absent'], true)) {
             $val['errors']['status'] = 'Statut invalide.';
         }
@@ -569,21 +487,14 @@ class SessionController
 
     public function deleteSession(array $params): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $id = $params['id'];
-        $config = require __DIR__ . '/../../config/config.php';
-        $todayStr = $config['simulated_today'] ?: date('Y-m-d');
         $db = Database::getConnection();
 
-        $stmt = $db->prepare('SELECT * FROM sessions WHERE id = ?');
+        $stmt = $db->prepare('SELECT id FROM sessions WHERE id = ?');
         $stmt->execute([$id]);
-        $session = $stmt->fetch();
-        if (!$session) {
+        if (!$stmt->fetch()) {
             Response::validationError('Séance introuvable.');
-        }
-
-        if (!self::canModifySession($session, $user, $todayStr, (int)$config['session_edit_days'])) {
-            Response::validationError("Vous n'avez pas le droit de retirer cette séance.");
         }
 
         $del = $db->prepare('DELETE FROM sessions WHERE id = ?');
@@ -594,15 +505,11 @@ class SessionController
 
     public function teacherHours(array $params): void
     {
-        $user = Auth::requireRole('chef', 'enseignant');
+        Auth::requireRole('chef');
         $teacherId = $params['id'];
         $config = require __DIR__ . '/../../config/config.php';
         $period = "{$config['current_semester']}-{$config['academic_year']}";
         $db = Database::getConnection();
-
-        if ($user['role'] === 'enseignant' && $user['profileId'] !== $teacherId) {
-            Response::json(['message' => 'Accès non autorisé.'], 403);
-        }
 
         $tStmt = $db->prepare('SELECT id, contract_hours FROM teachers WHERE id = ?');
         $tStmt->execute([$teacherId]);

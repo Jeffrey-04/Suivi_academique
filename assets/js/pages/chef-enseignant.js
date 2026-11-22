@@ -1,12 +1,12 @@
 /*
  * Chef : fiche d'un enseignant (?id=tea-001) : identité, bilan d'heures du semestre, matières attribuées,
- * puis heures / présence / séances sur la période choisie (sélecteur de l'en-tête).
+ * emploi du temps hebdomadaire, puis heures / présence / séances sur la période choisie (sélecteur de l'en-tête).
  */
 
 import { config, url } from '../config.js';
 import { initPage } from '../layout.js';
 import { confirmDeleteTeacher, openTeacherForm } from '../components/teacher-form.js';
-import { HoursService, SessionService, StatsService, TeacherService } from '../services/index.js';
+import { HoursService, ReferenceService, SessionService, StatsService, SubjectService, TeacherService, TimetableService, WEEKDAYS } from '../services/index.js';
 import { trend } from '../utils/calculs.js';
 import { cardSparkline } from '../utils/charts.js';
 import { queueToast } from '../utils/dialogs.js';
@@ -57,6 +57,31 @@ function subjectsTable(rows) {
       <div class="table-responsive">
         <table class="table-custom">
           <thead><tr><th>Matière</th><th>Classe</th><th title="Coefficient">Coef.</th><th>Heures prévues</th><th>Notes</th><th title="Moyenne du contrôle continu">Moy. CC</th><th>Moy. examen</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>`;
+}
+
+/** Emploi du temps hebdomadaire de l'enseignant : un créneau par ligne, du lundi au samedi. */
+function timetableTable(slots, subjects, classes) {
+    if (!slots.length) return emptyState("Aucun créneau n'est prévu pour cet enseignant.", 'bi-calendar-week');
+    const subjectById = new Map(subjects.map((s) => [s.id, s]));
+    const classById = new Map(classes.map((c) => [c.id, c]));
+    const body = slots.map((s) => {
+        const subject = subjectById.get(s.subjectId);
+        return `
+        <tr>
+          <td><div class="table-product-name">${esc(WEEKDAYS[s.weekday])}</div><div class="table-user-sub">${esc(s.startTime)} - ${esc(s.endTime)}</div></td>
+          <td><div class="table-product-name">${esc(subject?.name ?? '—')}</div><div class="table-user-sub">${esc(subject?.code ?? '')}</div></td>
+          <td>${esc(classById.get(s.levelId)?.short ?? '—')}</td>
+          <td>${esc(s.room ?? '—')}</td>
+          <td class="d-none d-md-table-cell">${esc(formatDate(s.validFrom))} → ${esc(formatDate(s.validUntil))}</td>
+        </tr>`;
+    }).join('');
+    return `
+      <div class="table-responsive">
+        <table class="table-custom">
+          <thead><tr><th>Jour</th><th>Matière</th><th>Classe</th><th>Salle</th><th class="d-none d-md-table-cell">Période</th></tr></thead>
           <tbody>${body}</tbody>
         </table>
       </div>`;
@@ -131,7 +156,10 @@ if (ctx) {
                 $('content').innerHTML = `<div class="card">${emptyState("Cet enseignant n'existe pas ou a été supprimé.", 'bi-person-x')}<div class="text-center"><a class="btn-custom btn-custom-primary" href="${esc(listUrl)}">Retour à la liste</a></div></div>`;
                 return;
             }
-            const [overview, hours] = await Promise.all([StatsService.teacherOverview(teacher.id), HoursService.summary(teacher.id)]);
+            const [overview, hours, slots, subjects, classes] = await Promise.all([
+                StatsService.teacherOverview(teacher.id), HoursService.summary(teacher.id),
+                TimetableService.slots({ teacherId: teacher.id }), SubjectService.list(), ReferenceService.classes(),
+            ]);
             document.title = `${fullName(teacher)} - Enseignants - Suivi Académique`;
             $('page-title').textContent = fullName(teacher);
             $('page-subtitle').textContent = `${teacher.grade} · semestre ${config.CURRENT_SEMESTER} ${config.ACADEMIC_YEAR}`;
@@ -164,6 +192,15 @@ if (ctx) {
                   <div class="card p-0 mb-0">
                     <div class="p-4 pb-3"><h3 class="card-title">Matières attribuées</h3></div>
                     ${subjectsTable(overview.rows)}
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="card p-0 mb-0">
+                    <div class="p-4 pb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                      <h3 class="card-title mb-0">Emploi du temps</h3>
+                      <a class="btn-table-action" href="${esc(url('pages/chef/emploi-du-temps.html'))}"><i class="bi bi-calendar-week"></i> Gérer l'emploi du temps</a>
+                    </div>
+                    ${timetableTable(slots, subjects, classes)}
                   </div>
                 </div>
                 <div class="col-12">

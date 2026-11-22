@@ -1,14 +1,14 @@
 {
   "info": {
     "_postman_id": "d8830379-67d1-4f2e-9b9b-0f47a6b26ce1",
-    "name": "Suivi Acad?mique API",
-    "description": "Collection compl?te g?n?r?e depuis api/index.php. Importez l?environnement Laragon, connectez-vous via POST /auth/login et Postman conservera le cookie de session. Les corps de requ?te sp?cifiques sont d?crits dans docs/openapi.yaml et valid?s dans les contr?leurs. Faites les requ?tes d??criture sur une base de test.",
+    "name": "Suivi Académique API",
+    "description": "Collection de l'API (un seul utilisateur : le chef de département). Importez l'environnement local, connectez-vous via POST /auth/login (chef@dept-info.demo / demo1234 sur une installation de démonstration) et Postman conservera le cookie de session. Les corps de requête sont décrits dans docs/openapi.yaml et validés dans les contrôleurs. Faites les requêtes d'écriture sur une base de test.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost/Suivi%20Academique/Suivi%20academique%20Backend/api"
+      "value": "http://localhost:8000/backend/api"
     },
     {
       "key": "email",
@@ -96,7 +96,7 @@
       ]
     },
     {
-      "name": "R?f?rentiels",
+      "name": "Référentiels",
       "item": [
         {
           "name": "GET /classes",
@@ -161,7 +161,7 @@
       ]
     },
     {
-      "name": "?tudiants",
+      "name": "Étudiants",
       "item": [
         {
           "name": "GET /students",
@@ -493,7 +493,7 @@
       ]
     },
     {
-      "name": "Mati?res et notes",
+      "name": "Matières et notes",
       "item": [
         {
           "name": "GET /grades",
@@ -793,51 +793,8 @@
       ]
     },
     {
-      "name": "S?ances, heures et pr?sences",
+      "name": "Séances et heures",
       "item": [
-        {
-          "name": "GET /checkins",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/checkins"
-            }
-          }
-        },
-        {
-          "name": "POST /checkins",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/checkins"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"subjectId\": \"{{subjectId}}\",\n  \"lat\": 3.8667,\n  \"lng\": 11.5167,\n  \"accuracy\": 20\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
         {
           "name": "GET /hours",
           "request": {
@@ -850,21 +807,6 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/hours"
-            }
-          }
-        },
-        {
-          "name": "GET /institution/location",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/institution/location"
             }
           }
         },
@@ -1019,6 +961,269 @@
             "body": {
               "mode": "raw",
               "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Emploi du temps",
+      "item": [
+        {
+          "name": "GET /timetable/slots",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/slots"
+            }
+          }
+        },
+        {
+          "name": "GET /timetable/slots",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/slots?teacherId=tea-005"
+            }
+          }
+        },
+        {
+          "name": "GET /timetable/slots/{id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/slots/{{id}}"
+            }
+          }
+        },
+        {
+          "name": "POST /timetable/slots",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/slots"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectId\": \"sub-031\",\n  \"weekday\": 6,\n  \"startTime\": \"08:00\",\n  \"endTime\": \"10:00\",\n  \"room\": \"Salle 101\",\n  \"validFrom\": \"2027-01-11\",\n  \"validUntil\": \"2027-02-26\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PUT /timetable/slots/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/slots/{{id}}"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectId\": \"sub-031\",\n  \"weekday\": 6,\n  \"startTime\": \"08:00\",\n  \"endTime\": \"11:00\",\n  \"room\": \"Salle 101\",\n  \"validFrom\": \"2027-01-11\",\n  \"validUntil\": \"2027-02-26\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /timetable/slots/{id}",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/slots/{{id}}"
+            }
+          }
+        },
+        {
+          "name": "GET /timetable/occurrences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/occurrences?from=2027-01-04&to=2027-01-10"
+            }
+          }
+        },
+        {
+          "name": "GET /timetable/occurrences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/occurrences?from=2026-09-14&to=2027-01-25&status=toConfirm"
+            }
+          }
+        },
+        {
+          "name": "POST /timetable/occurrences/confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/occurrences/confirm"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": \"slt-025\",\n  \"date\": \"2027-01-06\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /timetable/occurrences/absence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/occurrences/absence"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": \"slt-007\",\n  \"date\": \"2027-01-06\",\n  \"note\": \"Maladie\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /timetable/occurrences/cancel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/occurrences/cancel"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": \"slt-001\",\n  \"date\": \"2027-02-06\",\n  \"reason\": \"Jour férié\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /timetable/occurrences/restore",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/timetable/occurrences/restore"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": \"slt-001\",\n  \"date\": \"2027-02-06\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1226,79 +1431,8 @@
       ]
     },
     {
-      "name": "Comptes et profil",
+      "name": "Compte du chef",
       "item": [
-        {
-          "name": "GET /accounts",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/accounts"
-            }
-          }
-        },
-        {
-          "name": "PATCH /accounts/{id}",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/accounts/{{id}}"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "POST /accounts/{id}/reset-password",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/accounts/{{id}}/reset-password"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
         {
           "name": "PATCH /me/contact",
           "request": {

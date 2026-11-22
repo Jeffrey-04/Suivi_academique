@@ -3,6 +3,7 @@ CLAUDE.md
 contrat-api.md
 projet.md
 analyse-backend.md
+analyse-role-unique.md
 
 # Système et éditeurs
 .DS_Store
@@ -17,3 +18,5 @@ backend/storage/*
 !backend/storage/.htaccess
 analyse-backend.md
 GUIDE_INFINITYFREE.md
+analyse-role-unique.md
+References/

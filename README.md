@@ -5,7 +5,7 @@
 ![Dépôt public](https://img.shields.io/badge/d%C3%A9p%C3%B4t-public-lightgrey)
 ![Frontend](https://img.shields.io/badge/frontend-HTML%20%C2%B7%20Bootstrap%205%20%C2%B7%20JS%20natif-informational)
 
-**Application web de suivi académique départemental** : notes, bulletins, heures et présences des enseignants, calendrier et rappels. Trois espaces selon le rôle : **chef de département**, **enseignant** et **étudiant**.
+**Application web de suivi académique départemental** : notes, bulletins, heures et présences des enseignants, emploi du temps, calendrier et rappels. **Un seul utilisateur : le chef de département**, qui assure seul le suivi ; les enseignants et les étudiants sont des fiches qu'il gère, sans compte ni connexion.
 
 > ## 🌍 Projet open source
 > Ce dépôt est **public** et le code est **libre** (licence [MIT](LICENSE)) : vous pouvez le lire, l'utiliser, le modifier, le redistribuer et vous en inspirer, y compris pour un usage commercial, en conservant la mention de copyright. Les idées, corrections et contributions sont les bienvenues (voir [Contribuer](#contribuer)).
@@ -27,13 +27,14 @@
 
 ## Ce que fait l'application
 
-| Espace | Fonctionnalités principales |
+| Domaine | Fonctionnalités principales |
 |---|---|
-| **Chef de département** | Tableau de bord (indicateurs, tendances, graphiques) · gestion des étudiants et des enseignants (fiches, ajout, modification, suppression, export) · matières et attributions · consultation des notes · **génération des bulletins** (relevés de notes au format camerounais, PDF unitaire ou groupé) · suivi des **heures** et des **présences** des enseignants · **calendrier** avec rappels et notifications · **gestion des comptes** (activation, réinitialisation de mot de passe) |
-| **Enseignant** | Tableau de bord · ses matières · **saisie et validation des notes** (brouillon, validation, rattrapage) · **déclaration des séances** et historique · **« Marquer ma présence »** par géolocalisation · calendrier · profil et réglages |
-| **Étudiant** | Tableau de bord (moyenne, progression, comparaison à la classe) · **notes validées** · **bulletin** (aperçu et téléchargement PDF) · calendrier · profil et réglages |
+| **Personnes** | Fiches des **étudiants** et des **enseignants** (ajout, modification, suppression, export Excel / CSV) · recherche rapide |
+| **Pédagogie** | Matières et attributions · **saisie et validation des notes** (brouillon, validation, rattrapage) · résultats par classe · **génération des bulletins** (relevés de notes au format camerounais, PDF unitaire ou groupé) |
+| **Suivi des enseignants** | **Emploi du temps** hebdomadaire (créneaux, conflits d'enseignant, de classe et de salle) · séances prévues à **confirmer en un clic** ou à déclarer absentes · journal des **séances** (déclarer, absence, corriger) · **heures** réalisées, dues et supplémentaires |
+| **Pilotage** | Tableau de bord (indicateurs, tendances, séances à confirmer) · **calendrier** avec rappels J-7 / J-1 et notifications · profil et réglages |
 
-Transversal : exports **Excel (.xlsx) mis en forme**, CSV et agenda **.ics** · recherche rapide · rappels automatiques J-7 / J-1 · profil, photo et réglages personnels · interface en français, utilisable sur ordinateur et sur téléphone · bibliothèques embarquées (fonctionne **hors ligne**, sans installation npm).
+Transversal : exports **Excel (.xlsx) mis en forme**, CSV et agenda **.ics** · recherche rapide · rappels automatiques J-7 / J-1 · profil, photo et réglage · interface en français, utilisable sur ordinateur et sur téléphone · bibliothèques embarquées (fonctionne **hors ligne**, sans installation npm).
 
 ## Lancer le projet
 
@@ -47,21 +48,19 @@ php backend/install.php --mode=demo        # schéma + jeu de démonstration
 php -S localhost:8000 -t . tools/dev-router.php
 ```
 
-Puis ouvrir <http://localhost:8000/>. Les modes d'installation (démonstration ou production), la configuration, le cron des rappels, l'envoi d'e-mails et la sécurité sont décrits dans [backend/README.md](backend/README.md) ; le déploiement pas à pas sur un hébergement gratuit (InfinityFree) dans [GUIDE_INFINITYFREE.md](GUIDE_INFINITYFREE.md).
+Puis ouvrir <http://localhost:8000/>. Les modes d'installation (démonstration ou production), la configuration, le cron des rappels, la sécurité sont décrits dans [backend/README.md](backend/README.md) ; le déploiement pas à pas sur un hébergement gratuit (InfinityFree) dans [GUIDE_INFINITYFREE.md](GUIDE_INFINITYFREE.md).
 
 **Sans serveur** : le mode démonstration autonome (données simulées dans le navigateur) s'ouvre avec `?mock=1` (`?mock=0` pour revenir au backend), par exemple avec `python3 -m http.server 8000` puis <http://localhost:8000/?mock=1>.
 
-## Comptes de démonstration
+## Compte de démonstration
 
-Mot de passe commun : **`demo1234`** (les comptes sont aussi proposés en un clic sur la page de connexion).
+Un seul compte : le chef de département (mot de passe **`demo1234`**, proposé en un clic sur la page de connexion).
 
 | Rôle | Adresse e-mail |
 |---|---|
 | Chef de département | `chef@dept-info.demo` |
-| Enseignant | `herve.kamga@dept-info.demo` |
-| Étudiant | `ulrich.foning@etu.dept-info.demo` |
 
-Les données sont **fictives** et réalistes (3 filières, 54 étudiants, 14 enseignants, 45 matières, 870 séances…). En mode démonstration, la date du jour est **simulée** au 25/01/2027 pour que le jeu de données reste cohérent. En **production**, la base est vierge avec un seul compte chef de département et les vrais mots de passe sont temporaires et aléatoires.
+Les données sont **fictives** et réalistes (3 filières, 54 étudiants, 14 enseignants, 45 matières, 58 créneaux d'emploi du temps, 867 séances…). En mode démonstration, la date du jour est **simulée** au 25/01/2027 pour que le jeu de données reste cohérent. En **production**, la base est vierge avec un seul compte chef de département : vous choisissez son mot de passe à l'installation.
 
 ## Technologies
 
@@ -79,7 +78,7 @@ Toutes les bibliothèques sont copiées dans `assets/libs/` (versions et licence
 ```
 School/
 ├── index.html · page-login.html · page-404.html
-├── pages/{chef,enseignant,etudiant}/   # une page HTML par écran
+├── pages/chef/                         # une page HTML par écran
 ├── assets/
 │   ├── css/main.css                    # feuille de style unique, sections numérotées
 │   ├── libs/                           # bibliothèques tierces (locales)
@@ -96,7 +95,7 @@ Les pages ne lisent jamais les données directement : elles passent par `assets/
 
 ## État du projet et backend
 
-- **Application complète** pour les trois rôles : frontend statique + **API PHP / MySQL** (`backend/`), intégrés et vérifiés ensemble.
+- **Application complète** pour le chef de département (seul utilisateur) : frontend statique + **API PHP / MySQL** (`backend/`), intégrés et vérifiés ensemble.
 - Les écrans passent uniquement par la couche de services (`assets/js/services/`) : en mode normal ils appellent l'API, en mode démonstration autonome (`?mock=1`) ils utilisent des données simulées dans le navigateur.
 - Plus de 250 contrôles automatiques (lectures, droits, écritures, sécurité, parcours dans le navigateur) : voir [tools/tests/README.md](tools/tests/README.md).
 - 🔒 **Sécurité** : l'authentification et les droits sont assurés par le serveur (session, mots de passe hachés, requêtes préparées, limitation des tentatives de connexion). Les comptes de démonstration (`demo1234`) ne doivent **jamais** servir en production ; l'établissement et le doyen figurant sur les relevés sont **fictifs** tant qu'ils ne sont pas configurés.
@@ -115,7 +114,7 @@ Les contributions sont les bienvenues : signaler un problème, proposer une amé
 1. Parcourir la [structure du projet](#structure-du-projet) : un écran = une page HTML + un module dans `assets/js/pages/` ; la logique métier vit dans `assets/js/services/` et `assets/js/utils/calculs.js`.
 2. Respecter les principes : **interface en français, code en anglais**, aucun style en ligne, pas de variable globale, composants existants réutilisés, **pages sans accès direct aux données** (passer par les services).
 3. Ne pas modifier `assets/mock/*.json` à la main : modifier `tools/generate-mock.mjs` puis le relancer (ces fichiers alimentent aussi le jeu de démonstration du backend).
-4. Vérifier : `node tools/tests/run-all.mjs` (voir [tools/tests/README.md](tools/tests/README.md)) et dans le navigateur la console sans erreur, le rendu ordinateur **et** téléphone, les trois rôles.
+4. Vérifier : `node tools/tests/run-all.mjs` (voir [tools/tests/README.md](tools/tests/README.md)) et dans le navigateur la console sans erreur, le rendu ordinateur **et** téléphone, les écrans du chef de département.
 
 Ouvrez une *issue* pour discuter d'un changement important avant de le développer.
 
